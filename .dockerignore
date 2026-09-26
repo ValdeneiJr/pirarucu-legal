@@ -1,0 +1,10 @@
+.venv/
+data/
+tests/
+**/__pycache__/
+.pytest_cache/
+.vscode/
+.git/
+*.md
+!README.md
+apresentacao/

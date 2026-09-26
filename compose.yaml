@@ -1,0 +1,35 @@
+# Pirarucu Legal: nó da blockchain local + interface
+#
+#   docker compose up --build -d                     sobe tudo (interface em http://localhost:8501)
+#   docker compose logs -f node                      acompanha o nó
+#   docker compose down -v                           para tudo e apaga a blockchain
+
+services:
+  node:
+    build: .
+    image: pirarucu-legal
+    command: uvicorn pirarucu.api:create_app --factory --host 0.0.0.0 --port 8000
+    environment:
+      DB_PATH: /data/pirarucu.db
+    volumes:
+      - chain-data:/data   # o banco SQLite sobrevive quando o container reinicia
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      retries: 10
+
+  ui:
+    image: pirarucu-legal
+    command: streamlit run pirarucu/ui.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
+    environment:
+      API_URL: http://node:8000   # dentro do compose, o nó é encontrado pelo nome do serviço
+    ports:
+      - "8501:8501"
+    depends_on:
+      node:
+        condition: service_healthy   # a interface só sobe depois que o nó responder
+
+volumes:
+  chain-data:
