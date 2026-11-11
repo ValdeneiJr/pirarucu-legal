@@ -1,0 +1,92 @@
+// ABI e endereço do contrato PirarucuLegal implantado na Sepolia.
+//
+// Depois do deploy no Remix:
+//   1. troque "endereco" pelo endereço do contrato implantado;
+//   2. troque "blocoDeploy" pelo número do bloco da transação de deploy
+//      (a partir dele o frontend busca o histórico de eventos).
+// Se o contrato for alterado, copie a ABI nova do Remix (aba Solidity Compiler >
+// contrato PirarucuLegal > ABI).
+// Aqui ela está enxuta: uma entrada por linha e sem os campos "internalType",
+// que o Web3.js não usa. Colar a ABI completa do Remix também funciona.
+
+const CONTRATO = {
+  endereco: "0xEE4066902b6C363d369D610c6c8A5cDEd6456FDD",
+  blocoDeploy: 12147903,
+  abi: [
+    // constructor
+    {"inputs": [], "stateMutability": "nonpayable", "type": "constructor"},
+    // funções
+    {"inputs": [], "name": "MAX_POR_PAGINA", "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "PERCENTUAL_COTA", "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "PESO_MAXIMO_G", "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "TAMANHO_MAXIMO_CM", "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "TAMANHO_MAX_LACRE", "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "TAMANHO_MAX_TEXTO", "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "TAMANHO_MINIMO_CM", "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "TAMANHO_MIN_LACRE", "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "TEMPERATURA_MAXIMA_C", "outputs": [{"name": "", "type": "int16"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "TEMPERATURA_MINIMA_C", "outputs": [{"name": "", "type": "int16"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"name": "id", "type": "uint256"}, {"name": "motivo", "type": "string"}], "name": "apreender", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [{"name": "comunidade", "type": "address"}, {"name": "adultosContados", "type": "uint256"}], "name": "autorizarManejo", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [{"name": "conta", "type": "address"}, {"name": "papel", "type": "uint8"}, {"name": "nome", "type": "string"}], "name": "cadastrarParticipante", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [{"name": "adultosContados", "type": "uint256"}], "name": "calcularCota", "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "pure", "type": "function"},
+    {"inputs": [{"name": "id", "type": "uint256"}], "name": "cancelarVenda", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [{"name": "id", "type": "uint256"}, {"name": "precoWei", "type": "uint256"}], "name": "colocarAVenda", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [{"name": "id", "type": "uint256"}], "name": "comprar", "outputs": [], "stateMutability": "payable", "type": "function"},
+    {"inputs": [{"name": "id", "type": "uint256"}], "name": "consultarPeixe", "outputs": [{"components": [{"name": "id", "type": "uint256"}, {"name": "lacre", "type": "string"}, {"name": "comunidade", "type": "address"}, {"name": "dono", "type": "address"}, {"name": "comprimentoCm", "type": "uint256"}, {"name": "pesoGramas", "type": "uint256"}, {"name": "local", "type": "string"}, {"name": "temperaturaC", "type": "int16"}, {"name": "armazenado", "type": "bool"}, {"name": "preco", "type": "uint256"}, {"name": "etapa", "type": "uint8"}, {"name": "capturadoEm", "type": "uint256"}], "name": "", "type": "tuple"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"name": "lacre", "type": "string"}], "name": "consultarPorLacre", "outputs": [{"components": [{"name": "id", "type": "uint256"}, {"name": "lacre", "type": "string"}, {"name": "comunidade", "type": "address"}, {"name": "dono", "type": "address"}, {"name": "comprimentoCm", "type": "uint256"}, {"name": "pesoGramas", "type": "uint256"}, {"name": "local", "type": "string"}, {"name": "temperaturaC", "type": "int16"}, {"name": "armazenado", "type": "bool"}, {"name": "preco", "type": "uint256"}, {"name": "etapa", "type": "uint8"}, {"name": "capturadoEm", "type": "uint256"}], "name": "", "type": "tuple"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"name": "comunidade", "type": "address"}], "name": "cotaRestante", "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"name": "", "type": "address"}], "name": "cotas", "outputs": [{"name": "adultosContados", "type": "uint256"}, {"name": "limite", "type": "uint256"}, {"name": "capturados", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"name": "conta", "type": "address"}, {"name": "ativo", "type": "bool"}], "name": "definirAtivo", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [{"name": "conta", "type": "address"}], "name": "eFiscalizador", "outputs": [{"name": "", "type": "bool"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "fiscalizador", "outputs": [{"name": "", "type": "address"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"name": "lacre", "type": "string"}], "name": "hashDoLacre", "outputs": [{"name": "", "type": "bytes32"}], "stateMutability": "pure", "type": "function"},
+    {"inputs": [{"name": "inicio", "type": "uint256"}, {"name": "quantidade", "type": "uint256"}], "name": "listarPeixes", "outputs": [{"components": [{"name": "id", "type": "uint256"}, {"name": "lacre", "type": "string"}, {"name": "comunidade", "type": "address"}, {"name": "dono", "type": "address"}, {"name": "comprimentoCm", "type": "uint256"}, {"name": "pesoGramas", "type": "uint256"}, {"name": "local", "type": "string"}, {"name": "temperaturaC", "type": "int16"}, {"name": "armazenado", "type": "bool"}, {"name": "preco", "type": "uint256"}, {"name": "etapa", "type": "uint8"}, {"name": "capturadoEm", "type": "uint256"}], "name": "pagina", "type": "tuple[]"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"name": "", "type": "address"}], "name": "participantes", "outputs": [{"name": "nome", "type": "string"}, {"name": "papel", "type": "uint8"}, {"name": "cadastradoEm", "type": "uint256"}, {"name": "ativo", "type": "bool"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"name": "", "type": "uint256"}, {"name": "", "type": "address"}], "name": "passouPor", "outputs": [{"name": "", "type": "bool"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"name": "id", "type": "uint256"}, {"name": "temperaturaC", "type": "int16"}], "name": "registrarArmazenamento", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [{"name": "lacre", "type": "string"}, {"name": "comprimentoCm", "type": "uint256"}, {"name": "pesoGramas", "type": "uint256"}, {"name": "local", "type": "string"}], "name": "registrarCaptura", "outputs": [{"name": "id", "type": "uint256"}], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [{"name": "id", "type": "uint256"}], "name": "registrarVendaAoConsumidor", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [{"name": "valor", "type": "uint256"}], "name": "sacar", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [{"name": "", "type": "address"}], "name": "saldos", "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "totalNegociadoWei", "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "totalPeixes", "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    // eventos
+    {"anonymous": false, "inputs": [{"indexed": true, "name": "id", "type": "uint256"}, {"indexed": true, "name": "frigorifico", "type": "address"}, {"indexed": false, "name": "temperaturaC", "type": "int16"}], "name": "ArmazenamentoRegistrado", "type": "event"},
+    {"anonymous": false, "inputs": [{"indexed": true, "name": "comunidade", "type": "address"}, {"indexed": false, "name": "adultosContados", "type": "uint256"}, {"indexed": false, "name": "limite", "type": "uint256"}], "name": "ManejoAutorizado", "type": "event"},
+    {"anonymous": false, "inputs": [{"indexed": true, "name": "conta", "type": "address"}, {"indexed": false, "name": "ativo", "type": "bool"}], "name": "ParticipanteAtivoAlterado", "type": "event"},
+    {"anonymous": false, "inputs": [{"indexed": true, "name": "conta", "type": "address"}, {"indexed": false, "name": "papel", "type": "uint8"}, {"indexed": false, "name": "nome", "type": "string"}], "name": "ParticipanteCadastrado", "type": "event"},
+    {"anonymous": false, "inputs": [{"indexed": true, "name": "id", "type": "uint256"}, {"indexed": true, "name": "vendedor", "type": "address"}, {"indexed": false, "name": "preco", "type": "uint256"}], "name": "PeixeAVenda", "type": "event"},
+    {"anonymous": false, "inputs": [{"indexed": true, "name": "id", "type": "uint256"}, {"indexed": true, "name": "fiscalizador", "type": "address"}, {"indexed": false, "name": "motivo", "type": "string"}], "name": "PeixeApreendido", "type": "event"},
+    {"anonymous": false, "inputs": [{"indexed": true, "name": "id", "type": "uint256"}, {"indexed": true, "name": "comunidade", "type": "address"}, {"indexed": false, "name": "lacre", "type": "string"}, {"indexed": false, "name": "comprimentoCm", "type": "uint256"}, {"indexed": false, "name": "pesoGramas", "type": "uint256"}], "name": "PeixeRegistrado", "type": "event"},
+    {"anonymous": false, "inputs": [{"indexed": true, "name": "id", "type": "uint256"}, {"indexed": true, "name": "vendedor", "type": "address"}, {"indexed": true, "name": "comprador", "type": "address"}, {"indexed": false, "name": "valor", "type": "uint256"}, {"indexed": false, "name": "novaEtapa", "type": "uint8"}], "name": "PeixeVendido", "type": "event"},
+    {"anonymous": false, "inputs": [{"indexed": true, "name": "conta", "type": "address"}, {"indexed": false, "name": "valor", "type": "uint256"}], "name": "Saque", "type": "event"},
+    {"anonymous": false, "inputs": [{"indexed": true, "name": "id", "type": "uint256"}, {"indexed": true, "name": "vendedor", "type": "address"}], "name": "VendaCancelada", "type": "event"},
+    {"anonymous": false, "inputs": [{"indexed": true, "name": "id", "type": "uint256"}, {"indexed": true, "name": "mercado", "type": "address"}], "name": "VendidoAoConsumidor", "type": "event"},
+    // erros
+    {"inputs": [{"name": "chamador", "type": "address"}], "name": "ApenasFiscalizador", "type": "error"},
+    {"inputs": [{"name": "chamador", "type": "address"}], "name": "ApenasFiscalizadorPrincipal", "type": "error"},
+    {"inputs": [{"name": "id", "type": "uint256"}], "name": "ArmazenamentoNaoRegistrado", "type": "error"},
+    {"inputs": [{"name": "comunidade", "type": "address"}], "name": "ComunidadeNaoAutorizada", "type": "error"},
+    {"inputs": [{"name": "capturados", "type": "uint256"}, {"name": "limite", "type": "uint256"}], "name": "CotaEsgotada", "type": "error"},
+    {"inputs": [{"name": "novoLimite", "type": "uint256"}, {"name": "capturados", "type": "uint256"}], "name": "CotaMenorQueCapturados", "type": "error"},
+    {"inputs": [{"name": "id", "type": "uint256"}, {"name": "atual", "type": "uint8"}, {"name": "esperada", "type": "uint8"}], "name": "EtapaInvalida", "type": "error"},
+    {"inputs": [], "name": "FalhaNoSaque", "type": "error"},
+    {"inputs": [{"name": "lacre", "type": "string"}], "name": "LacreInvalido", "type": "error"},
+    {"inputs": [{"name": "lacre", "type": "string"}], "name": "LacreJaUsado", "type": "error"},
+    {"inputs": [{"name": "lacre", "type": "string"}], "name": "LacreNaoEncontrado", "type": "error"},
+    {"inputs": [{"name": "id", "type": "uint256"}, {"name": "chamador", "type": "address"}], "name": "NaoEDonoDoPeixe", "type": "error"},
+    {"inputs": [{"name": "esperado", "type": "uint8"}, {"name": "atual", "type": "uint8"}], "name": "PapelInvalido", "type": "error"},
+    {"inputs": [{"name": "conta", "type": "address"}], "name": "ParticipanteInativo", "type": "error"},
+    {"inputs": [{"name": "conta", "type": "address"}], "name": "ParticipanteJaCadastrado", "type": "error"},
+    {"inputs": [{"name": "conta", "type": "address"}], "name": "ParticipanteNaoEncontrado", "type": "error"},
+    {"inputs": [{"name": "id", "type": "uint256"}], "name": "PeixeInexistente", "type": "error"},
+    {"inputs": [{"name": "id", "type": "uint256"}], "name": "PeixeNaoEstaAVenda", "type": "error"},
+    {"inputs": [{"name": "id", "type": "uint256"}, {"name": "atual", "type": "uint8"}], "name": "PeixeNaoNegociavel", "type": "error"},
+    {"inputs": [{"name": "informadoG", "type": "uint256"}, {"name": "maximoG", "type": "uint256"}], "name": "PesoInvalido", "type": "error"},
+    {"inputs": [{"name": "disponivel", "type": "uint256"}, {"name": "solicitado", "type": "uint256"}], "name": "SaldoInsuficiente", "type": "error"},
+    {"inputs": [{"name": "informadoCm", "type": "uint256"}, {"name": "minimoCm", "type": "uint256"}, {"name": "maximoCm", "type": "uint256"}], "name": "TamanhoForaDaFaixa", "type": "error"},
+    {"inputs": [{"name": "informada", "type": "int16"}, {"name": "minima", "type": "int16"}, {"name": "maxima", "type": "int16"}], "name": "TemperaturaInadequada", "type": "error"},
+    {"inputs": [{"name": "esperado", "type": "uint256"}, {"name": "enviado", "type": "uint256"}], "name": "ValorIncorreto", "type": "error"},
+  ],
+};
