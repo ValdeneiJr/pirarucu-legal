@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pirarucu Legal · dApp na Sepolia</title>
+  <meta name="description" content="Rastreabilidade do pirarucu de manejo com contrato inteligente na Ethereum Sepolia.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐟</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js" defer></script>
+  <script src="contrato.js" defer></script>
+  <script src="constantes.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">
+      <span class="logo" aria-hidden="true">🐟</span>
+      <div>
+        <strong>Pirarucu Legal</strong>
+        <small>rastreabilidade do pirarucu de manejo</small>
+      </div>
+    </div>
+    <div class="carteira">
+      <span id="rede" class="selo">sem carteira</span>
+      <div id="infoConta" class="info-conta" hidden>
+        <span id="papel" class="selo"></span>
+        <a id="endereco" target="_blank" rel="noopener"></a>
+        <span id="saldoEth" class="saldo"></span>
+      </div>
+      <button id="btnConectar" class="btn">Conectar carteira</button>
+    </div>
+  </header>
+
+  <div id="avisoMetaMask" class="aviso" hidden>
+    MetaMask não encontrada. Você pode consultar os peixes, mas para enviar transações
+    instale a <a href="https://metamask.io/download/" target="_blank" rel="noopener">MetaMask</a>.
+  </div>
+  <div id="avisoRede" class="aviso" hidden>
+    A MetaMask não está na rede <strong>Sepolia</strong>. As transações só funcionam nela.
+    <button id="btnTrocarRede" class="btn btn-pequeno">Trocar para Sepolia</button>
+  </div>
+  <div id="avisoContrato" class="aviso" hidden>
+    O endereço do contrato ainda não foi configurado em <code>contrato.js</code>.
+  </div>
+
+  <main>
+    <section class="resumo">
+      <div class="cartao-numero"><span>Peixes registrados</span><strong id="totalPeixes">–</strong></div>
+      <div class="cartao-numero"><span>ETH negociado na cadeia</span><strong id="totalNegociado">–</strong></div>
+      <div class="cartao-numero"><span>Fiscalizador principal</span><a id="linkFiscal" target="_blank" rel="noopener">–</a></div>
+      <div class="cartao-numero"><span>Contrato</span><a id="linkContrato" target="_blank" rel="noopener">–</a></div>
+    </section>
+
+    <!-- Só aparece para fiscalizadores (o principal e os adicionais ativos) -->
+    <section id="painelFiscal" class="card destaque" hidden>
+      <h2>Painel do fiscalizador</h2>
+      <p class="dica" id="dicaFiscal">Só fiscalizadores veem este painel.</p>
+      <div class="grade">
+        <!-- Cadastrar e suspender: só o fiscalizador principal (dono do contrato) -->
+        <form id="formCadastrar" class="form so-principal">
+          <h3>Cadastrar participante</h3>
+          <label>Endereço da carteira <input name="conta" placeholder="0x…" required></label>
+          <label>Papel
+            <select name="papel">
+              <option value="1">Comunidade</option>
+              <option value="2">Frigorífico</option>
+              <option value="3">Mercado</option>
+              <option value="4">Fiscalizador adicional</option>
+            </select>
+          </label>
+          <label>Nome <input name="nome" maxlength="60" placeholder="Comunidade Boa Esperança" required></label>
+          <button class="btn">Cadastrar</button>
+        </form>
+
+        <form id="formAutorizar" class="form">
+          <h3>Autorizar manejo</h3>
+          <label>Comunidade <input name="comunidade" list="listaComunidades" placeholder="0x…" required></label>
+          <datalist id="listaComunidades"></datalist>
+          <label>Adultos contados no lago <input name="adultos" type="number" min="1" step="1" required></label>
+          <p class="dica" id="previaCota">A cota é 30% dos adultos contados.</p>
+          <button class="btn">Autorizar</button>
+        </form>
+
+        <form id="formApreender" class="form">
+          <h3>Apreender peixe</h3>
+          <label>Id do peixe <input name="idPeixe" type="number" min="0" step="1" required></label>
+          <label>Motivo <input name="motivo" maxlength="100" placeholder="Sem guia de transporte" required></label>
+          <button class="btn btn-perigo">Apreender</button>
+        </form>
+
+        <form id="formAtivo" class="form so-principal">
+          <h3>Suspender ou reativar</h3>
+          <label>Participante <input name="conta" list="listaParticipantes" placeholder="0x…" required></label>
+          <datalist id="listaParticipantes"></datalist>
+          <label>Ação
+            <select name="acao">
+              <option value="suspender">Suspender</option>
+              <option value="reativar">Reativar</option>
+            </select>
+          </label>
+          <p class="dica">Suspenso, o participante não registra, não vende, não compra e não fiscaliza. O saque continua liberado.</p>
+          <button class="btn">Confirmar</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Só aparece para contas com papel Comunidade -->
+    <section id="painelComunidade" class="card" hidden>
+      <h2>Registrar captura</h2>
+      <p id="infoCota" class="dica"></p>
+      <form id="formCaptura" class="form form-linha">
+        <label>Lacre <input name="lacre" maxlength="20" placeholder="AM-000101" required></label>
+        <label>Comprimento (m) <input name="comprimento" type="number" step="0.01" min="0" placeholder="1.92" required></label>
+        <label>Peso (kg) <input name="peso" type="number" step="0.001" min="0" placeholder="74.5" required></label>
+        <label>Lago / local <input name="local" maxlength="60" placeholder="Lago Mamirauá" required></label>
+        <button class="btn">Registrar peixe</button>
+      </form>
+    </section>
+
+    <section id="painelSaldo" class="card" hidden>
+      <h2>Saldo de vendas</h2>
+      <div class="linha-saldo">
+        <p>Disponível para saque: <strong id="saldoVendas">0</strong> ETH</p>
+        <button id="btnSacar" class="btn">Sacar tudo</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="cabecalho-card">
+        <h2>Peixes</h2>
+        <div class="filtros">
+          <select id="filtroPeixes" aria-label="Filtrar peixes">
+            <option value="todos">Todos</option>
+            <option value="meus">Meus peixes</option>
+            <option value="comprar">À venda para mim</option>
+          </select>
+          <button id="btnAtualizar" class="btn btn-claro btn-pequeno">Atualizar</button>
+        </div>
+      </div>
+      <div id="listaPeixes" class="lista-peixes"><p class="vazio">Carregando…</p></div>
+    </section>
+
+    <section class="card">
+      <h2>Consultar lacre</h2>
+      <p class="dica">Qualquer pessoa pode conferir a origem e o caminho de um peixe, mesmo sem carteira.</p>
+      <form id="formConsulta" class="form form-linha">
+        <label>Número do lacre <input name="lacre" maxlength="20" placeholder="AM-000101" required></label>
+        <button class="btn">Consultar</button>
+      </form>
+      <div id="resultadoConsulta"></div>
+    </section>
+
+    <div class="grade-2">
+      <section class="card">
+        <h2>Minhas transações</h2>
+        <ul id="listaTx" class="lista-tx"><li class="vazio">Nenhuma transação enviada nesta sessão.</li></ul>
+      </section>
+
+      <section class="card">
+        <h2>Eventos do contrato</h2>
+        <ul id="listaEventos" class="lista-eventos"><li class="vazio">Carregando…</li></ul>
+      </section>
+    </div>
+  </main>
+
+  <footer class="rodape">
+    Pirarucu Legal · contrato inteligente na Ethereum Sepolia (testnet). Use somente ETH de teste.
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
