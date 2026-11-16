@@ -2,6 +2,8 @@
 
 Rastreabilidade do **pirarucu de manejo** da Amazônia, do lago ao mercado.
 
+Vídeo de demonstração: [link](https://drive.google.com/file/d/1gM1UsJsCyNTn9TUv375hU4CY1AEOuc4F/view?usp=drive_link)
+
 | Versão | O que é | Tecnologias |
 |---|---|---|
 | [**v1**](v1/) | Trabalho da AP1: blockchain local didática com contrato inteligente em Python | Python, FastAPI, Streamlit, SQLite, Docker |
