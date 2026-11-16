@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pirarucu Legal · dApp na Sepolia</title>
+  <meta name="description" content="Rastreabilidade do pirarucu de manejo com contrato inteligente na Ethereum Sepolia.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐟</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js" defer></script>
+  <script src="contrato.js" defer></script>
+  <script src="constantes.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topo">
+    <div class="topo-linha">
+      <div class="marca">
+        <svg class="logo" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M3 24c5-8 14-12.5 24-11.5 3.4.3 6.4 1.6 9 3.5v16c-2.6 1.9-5.6 3.2-9 3.5C17 36.5 8 32 3 24z" fill="#e8efe9"/>
+          <path d="M35 16l10-7-3 15 3 15-10-7z" fill="#d9573f"/>
+          <circle cx="13" cy="22" r="2.2" fill="#0e3b2c"/>
+        </svg>
+        <div>
+          <strong>Pirarucu Legal</strong>
+          <small>rastreabilidade do pirarucu de manejo</small>
+        </div>
+      </div>
+
+      <div class="carteira">
+        <span id="rede" class="selo">sem carteira</span>
+        <button id="btnConectar" class="btn btn-claro">Conectar carteira</button>
+
+        <!-- Conta ativa: abre o menu com todas as contas conectadas -->
+        <div id="infoConta" class="conta" hidden>
+          <button id="btnConta" class="conta-botao" aria-haspopup="true" aria-expanded="false" aria-controls="menuContas" title="Trocar de conta">
+            <span id="contaAvatar" class="avatar"></span>
+            <span class="conta-texto">
+              <strong id="contaNome"></strong>
+              <small id="papel"></small>
+            </span>
+            <span id="saldoEth" class="saldo"></span>
+            <svg class="seta" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+
+          <div id="menuContas" class="menu" hidden>
+            <div class="menu-topo">
+              <strong>Trocar de conta</strong>
+              <small>Escolha a conta que vai agir no site, sem abrir a MetaMask.</small>
+            </div>
+            <ul id="listaContas" class="lista-contas"></ul>
+            <div class="menu-acoes">
+              <button id="btnMaisContas" class="btn btn-claro btn-pequeno">Conectar outras contas</button>
+              <a id="endereco" target="_blank" rel="noopener">Ver no Etherscan</a>
+              <button id="btnDesconectar" class="btn-link perigo">Desconectar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="avisoMetaMask" class="aviso" hidden>
+    MetaMask não encontrada. Você pode consultar os peixes, mas para enviar transações
+    instale a <a href="https://metamask.io/download/" target="_blank" rel="noopener">MetaMask</a>.
+  </div>
+  <div id="avisoRede" class="aviso" hidden>
+    A MetaMask não está na rede <strong>Sepolia</strong>. As transações só funcionam nela.
+    <button id="btnTrocarRede" class="btn btn-pequeno">Trocar para Sepolia</button>
+  </div>
+  <div id="avisoContrato" class="aviso" hidden>
+    O endereço do contrato ainda não foi configurado em <code>contrato.js</code>.
+  </div>
+
+  <section class="heroi">
+    <div class="heroi-texto">
+      <span class="sobretitulo">Ethereum Sepolia · Decreto AM nº 36.083/2015</span>
+      <h1>Do lago ao mercado, cada pirarucu com lacre e história.</h1>
+      <p>O fiscalizador autoriza a cota, a comunidade registra cada peixe pelo lacre, e o frigorífico e o mercado compram pagando em ETH direto ao vendedor. Cada passo fica gravado na blockchain.</p>
+    </div>
+  </section>
+
+  <main>
+    <section class="resumo">
+      <div class="cartao-numero">
+        <span>Peixes registrados</span>
+        <strong id="totalPeixes">–</strong>
+      </div>
+      <div class="cartao-numero">
+        <span>ETH negociado na cadeia</span>
+        <strong id="totalNegociado">–</strong>
+      </div>
+      <div class="cartao-numero">
+        <span>Participantes cadastrados</span>
+        <strong id="totalParticipantes">–</strong>
+      </div>
+      <div class="cartao-numero">
+        <span>Contrato</span>
+        <a id="linkContrato" class="mono" target="_blank" rel="noopener">–</a>
+        <small>fiscal: <a id="linkFiscal" class="mono" target="_blank" rel="noopener">–</a></small>
+      </div>
+    </section>
+
+    <!-- Só aparece para o fiscalizador (dono do contrato) -->
+    <section id="painelFiscal" class="card destaque-fiscal" hidden>
+      <div class="card-cabecalho">
+        <div>
+          <span class="sobretitulo">Fiscalização</span>
+          <h2>Painel do fiscalizador</h2>
+          <p class="dica">Só o dono do contrato vê este painel: cadastra os participantes e autoriza o manejo de cada comunidade.</p>
+        </div>
+      </div>
+
+      <div class="abas" role="tablist" aria-label="Ações do fiscalizador">
+        <button class="aba" role="tab" data-aba="formCadastrar">Cadastrar participante</button>
+        <button class="aba" role="tab" data-aba="formAutorizar">Autorizar manejo</button>
+      </div>
+
+      <form id="formCadastrar" class="form painel-aba" role="tabpanel">
+        <div class="campos">
+          <label class="largo">Endereço da carteira <input name="conta" list="listaSemPapel" placeholder="0x… ou escolha uma conta conectada" required autocomplete="off"></label>
+          <datalist id="listaSemPapel"></datalist>
+          <label>Papel
+            <select name="papel">
+              <option value="1">Comunidade</option>
+              <option value="2">Frigorífico</option>
+              <option value="3">Mercado</option>
+            </select>
+          </label>
+          <label>Nome <input name="nome" maxlength="60" placeholder="Comunidade Boa Esperança" required></label>
+        </div>
+        <div class="form-rodape">
+          <p class="dica">O papel não pode ser trocado depois do cadastro.</p>
+          <button class="btn">Cadastrar</button>
+        </div>
+      </form>
+
+      <form id="formAutorizar" class="form painel-aba" role="tabpanel">
+        <div class="campos">
+          <label class="largo">Comunidade <input name="comunidade" list="listaComunidades" placeholder="0x… ou escolha da lista" required autocomplete="off"></label>
+          <datalist id="listaComunidades"></datalist>
+          <label>Adultos contados no lago <input name="adultos" type="number" min="1" step="1" required></label>
+        </div>
+        <div class="form-rodape">
+          <p class="dica" id="previaCota">A cota é 30% dos adultos contados.</p>
+          <button class="btn">Autorizar</button>
+        </div>
+      </form>
+
+    </section>
+
+    <!-- Só aparece para contas com papel Comunidade -->
+    <section id="painelComunidade" class="card" hidden>
+      <div class="card-cabecalho">
+        <div>
+          <span class="sobretitulo">Comunidade</span>
+          <h2>Registrar captura</h2>
+        </div>
+      </div>
+      <div class="cota">
+        <div class="cota-barra"><span id="barraCota"></span></div>
+        <p id="infoCota" class="dica"></p>
+      </div>
+      <form id="formCaptura" class="form">
+        <div class="campos campos-4">
+          <label>Lacre <input name="lacre" maxlength="20" placeholder="AM-000101" required autocomplete="off"></label>
+          <label>Comprimento (m) <input name="comprimento" type="number" step="0.01" min="0" placeholder="1.92" required></label>
+          <label>Peso (kg) <input name="peso" type="number" step="0.001" min="0" placeholder="74.5" required></label>
+          <label>Lago / local <input name="local" maxlength="60" placeholder="Lago Mamirauá" required></label>
+        </div>
+        <div class="form-rodape">
+          <p class="dica">Tamanho mínimo: 1,50 m. Cada lacre só pode ser usado uma vez.</p>
+          <button class="btn">Registrar peixe</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Só o fiscalizador vê as cotas de todas as comunidades -->
+    <section id="cardCotas" class="card" hidden>
+      <div class="card-cabecalho">
+        <div>
+          <span class="sobretitulo">Manejo</span>
+          <h2>Cotas das comunidades</h2>
+          <p class="dica">A cota é 30% dos adultos contados no lago. Cada peixe registrado consome 1 da cota da comunidade.</p>
+        </div>
+      </div>
+      <div id="listaCotas" class="lista-cotas"><p class="vazio">Carregando…</p></div>
+    </section>
+
+    <!-- Peixes: o fiscalizador vê todos; cada participante vê os seus e os que estão à venda para ele -->
+    <section id="cardPeixes" class="card" hidden>
+      <div class="card-cabecalho">
+        <div>
+          <span class="sobretitulo">Cadeia</span>
+          <h2 id="tituloPeixes">Peixes</h2>
+          <p class="dica" id="dicaPeixes"></p>
+        </div>
+        <div class="filtros">
+          <div id="filtroPeixes" class="segmentado" role="radiogroup" aria-label="Filtrar peixes">
+            <button role="radio" data-filtro="tudo" aria-checked="true">Tudo</button>
+            <button role="radio" data-filtro="meus" aria-checked="false">Meus peixes</button>
+            <button role="radio" data-filtro="comprar" aria-checked="false">À venda para mim</button>
+          </div>
+          <button id="btnAtualizar" class="btn btn-claro btn-pequeno" title="Recarregar dados do contrato">Atualizar</button>
+        </div>
+      </div>
+      <div id="listaPeixes" class="lista-peixes"><p class="vazio">Carregando…</p></div>
+    </section>
+
+    <section class="card card-consulta">
+      <div class="card-cabecalho">
+        <div>
+          <span class="sobretitulo">Consumidor</span>
+          <h2>Consultar lacre</h2>
+          <p class="dica">Qualquer pessoa pode conferir a origem e o caminho de um peixe, mesmo sem carteira.</p>
+        </div>
+      </div>
+      <form id="formConsulta" class="busca">
+        <input name="lacre" maxlength="20" placeholder="Digite o número do lacre, ex.: AM-000101" required aria-label="Número do lacre" autocomplete="off">
+        <button class="btn">Consultar</button>
+      </form>
+      <div id="resultadoConsulta"></div>
+    </section>
+
+    <div class="grade-2">
+      <section id="cardTx" class="card" hidden>
+        <h2>Minhas transações</h2>
+        <ul id="listaTx" class="lista-tx"><li class="vazio">Nenhuma transação enviada nesta sessão.</li></ul>
+      </section>
+
+      <!-- Eventos: o fiscalizador vê todos; cada participante, só os que envolvem a conta dele -->
+      <section id="cardEventos" class="card" hidden>
+        <h2 id="tituloEventos">Eventos do contrato</h2>
+        <ul id="listaEventos" class="lista-eventos"><li class="vazio">Carregando…</li></ul>
+      </section>
+    </div>
+  </main>
+
+  <footer class="rodape">
+    Pirarucu Legal · contrato inteligente na Ethereum Sepolia (testnet). Use somente ETH de teste.
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
