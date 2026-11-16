@@ -36,16 +36,19 @@ const estado = {
   contratoLeitura: null,
   web3Carteira: null,
   contratoCarteira: null,
-  conta: null,
+  conta: null, // conta ativa: a que assina as transações (from)
+  contas: [], // todas as contas que a MetaMask autorizou neste site
+  saldosContas: new Map(), // endereço (minúsculo) -> saldo em wei (BigInt)
   naSepolia: false,
   fiscalizador: null,
   papel: 0,
   nome: "",
-  ativo: true, // false = conta suspensa pelo fiscalizador principal
   peixes: [],
+  filtro: "todos", // filtro da lista de peixes
   eventos: [],
+  chavesEventos: new Set(), // "hash:índice" de cada log já guardado
   ultimoBlocoEventos: null,
-  participantes: new Map(), // endereço (minúsculo) -> { nome, papel, ativo }
+  participantes: new Map(), // endereço (minúsculo) -> { nome, papel }
 };
 
 const $ = (id) => document.getElementById(id);
@@ -88,7 +91,7 @@ async function iniciar() {
     window.ethereum.on("chainChanged", aoTrocarRede);
     // Se o site já foi autorizado antes, reconecta sem abrir a MetaMask
     const contas = await window.ethereum.request({ method: "eth_accounts" });
-    estado.conta = contas[0] || null;
+    definirContas(contas, lerContaSalva());
     await verificarRede();
   } else {
     $("avisoMetaMask").hidden = false;
@@ -99,7 +102,7 @@ async function iniciar() {
 }
 
 function contratoConfigurado() {
-  return typeof CONTRATO !== "undefined" && CONTRATO.endereco && CONTRATO.endereco !== ENDERECO_ZERO;
+  return typeof CONTRATO !== "undefined" && Web3.utils.isAddress(CONTRATO.endereco);
 }
 
 // Leitura: pela MetaMask quando ela está na Sepolia; senão, por um RPC público
@@ -118,10 +121,19 @@ function ligarEventosDaTela() {
   $("btnConectar").addEventListener("click", conectar);
   $("btnTrocarRede").addEventListener("click", trocarParaSepolia);
   $("btnAtualizar").addEventListener("click", () => atualizarTudo());
-  $("filtroPeixes").addEventListener("change", renderizarPeixes);
-  $("btnSacar").addEventListener("click", sacarTudo);
   $("formConsulta").addEventListener("submit", consultarLacre);
+  ligarMenuDeContas();
+  ligarAbas();
   ligarFormularios();
+
+  // Filtro dos peixes (botões segmentados)
+  $("filtroPeixes").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-filtro]");
+    if (!b) return;
+    estado.filtro = b.dataset.filtro;
+    $("filtroPeixes").querySelectorAll("button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+    renderizarPeixes();
+  });
   $("formAutorizar").elements.adultos.addEventListener("input", (e) => {
     const n = Number(e.target.value);
     $("previaCota").textContent = n > 0
@@ -148,6 +160,14 @@ function ligarEventosDaTela() {
 //   e a próxima transação sairia da conta errada. Em vez de recarregar a
 //   página, atualizamos o estado e a tela: o painel muda sozinho conforme
 //   o papel da nova conta (fiscalizador, comunidade, frigorífico, mercado).
+//
+// Troca rápida de conta (trocarConta):
+//   eth_accounts devolve TODAS as contas que o usuário autorizou para o
+//   site, não só a selecionada na extensão. O app guarda essa lista e deixa
+//   escolher a conta ativa com um clique no menu da conta (canto superior direito).
+//   A conta escolhida vai no campo "from" de cada transação, e a MetaMask
+//   assina com ela, sem precisar trocar de conta na extensão. Para incluir
+//   mais contas, wallet_requestPermissions reabre a tela de seleção.
 // =====================================================================
 
 async function conectar() {
@@ -157,11 +177,9 @@ async function conectar() {
   }
   try {
     const contas = await window.ethereum.request({ method: "eth_requestAccounts" });
-    estado.conta = contas[0] || null;
-    await verificarRede();
+    definirContas(contas);
+    await aoTrocarRede();
     if (!estado.naSepolia) toast("Conectado. Agora troque a rede para Sepolia.", true);
-    configurarProvedores();
-    await atualizarTudo();
   } catch (e) {
     toast(mensagemDeErro(e), true);
   }
@@ -206,9 +224,15 @@ async function trocarParaSepolia() {
   }
 }
 
+// A MetaMask avisa quando a conta selecionada ou a lista autorizada muda.
+// A primeira da lista é a selecionada na extensão: ela passa a ser a ativa.
 async function aoTrocarConta(contas) {
-  estado.conta = contas[0] || null;
-  toast(estado.conta ? `Conta trocada: ${curto(estado.conta)}` : "Carteira desconectada.");
+  const anterior = estado.conta;
+  definirContas(contas);
+  salvarConta(estado.conta);
+  if (estado.conta !== anterior) {
+    toast(estado.conta ? `Agindo como ${rotuloConta(estado.conta).nome}.` : "Carteira desconectada.");
+  }
   await atualizarTudo();
 }
 
@@ -218,13 +242,131 @@ async function aoTrocarRede() {
   await atualizarTudo();
 }
 
+// Guarda a lista de contas autorizadas e escolhe a ativa: a preferida (se
+// ainda estiver autorizada) ou a selecionada na MetaMask (primeira da lista).
+function definirContas(contas, preferida = null) {
+  estado.contas = contas || [];
+  const achada = preferida && estado.contas.find((c) => c.toLowerCase() === preferida.toLowerCase());
+  estado.conta = achada || estado.contas[0] || null;
+}
+
+// Troca rápida: muda a conta ativa do app sem abrir a MetaMask
+async function trocarConta(conta) {
+  if (!conta || conta === estado.conta) return fecharMenuContas();
+  estado.conta = conta;
+  salvarConta(conta);
+  fecharMenuContas();
+  // Mostra na hora o que já se sabe (nome e papel vêm dos eventos) e depois confirma no contrato
+  const conhecido = estado.participantes.get(conta.toLowerCase());
+  estado.papel = conhecido ? conhecido.papel : 0;
+  estado.nome = conhecido ? conhecido.nome : "";
+  renderizarTela();
+  toast(`Agindo como ${rotuloConta(conta).nome}.`);
+  try {
+    await carregarSaldos();
+    if (contratoConfigurado()) await atualizarPapel();
+  } catch (e) {
+    console.error(e);
+  }
+  if (estado.conta !== conta) return; // trocou de novo enquanto carregava
+  renderizarTela();
+}
+
+// Abre a tela da MetaMask para escolher quais contas o site pode usar
+// Algumas versões da MetaMask não abrem a tela quando o site já está
+// conectado; nesse caso, o aviso explica como incluir contas pela extensão.
+async function conectarMaisContas() {
+  fecharMenuContas();
+  const antes = estado.contas.length;
+  try {
+    await window.ethereum.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] });
+    const contas = await window.ethereum.request({ method: "eth_accounts" });
+    definirContas(contas, estado.conta);
+    await atualizarTudo();
+    if (estado.contas.length <= antes) toast(DICA_MAIS_CONTAS, true);
+  } catch (e) {
+    toast(e && e.code === 4001 ? mensagemDeErro(e) : `${mensagemDeErro(e)} ${DICA_MAIS_CONTAS}`, true);
+  }
+}
+
+// Revoga a permissão do site (MetaMask recente). Sem suporte, só limpa a tela.
+async function desconectar() {
+  fecharMenuContas();
+  try {
+    await window.ethereum.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] });
+  } catch (e) {
+    console.warn("wallet_revokePermissions indisponível:", e);
+  }
+  definirContas([]);
+  salvarConta(null);
+  toast("Carteira desconectada.");
+  await atualizarTudo();
+}
+
+function ligarMenuDeContas() {
+  $("btnConta").addEventListener("click", (e) => {
+    e.stopPropagation();
+    if ($("menuContas").hidden) abrirMenuContas();
+    else fecharMenuContas();
+  });
+  $("menuContas").addEventListener("click", (e) => e.stopPropagation());
+  document.addEventListener("click", fecharMenuContas);
+  $("btnMaisContas").addEventListener("click", conectarMaisContas);
+  $("btnDesconectar").addEventListener("click", desconectar);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") fecharMenuContas();
+  });
+}
+
+function abrirMenuContas() {
+  $("menuContas").hidden = false;
+  $("btnConta").setAttribute("aria-expanded", "true");
+}
+
+function fecharMenuContas() {
+  $("menuContas").hidden = true;
+  $("btnConta").setAttribute("aria-expanded", "false");
+}
+
+// A última conta escolhida fica no navegador, para continuar nela ao recarregar
+function salvarConta(conta) {
+  try {
+    if (conta) localStorage.setItem("pirarucu:conta", conta);
+    else localStorage.removeItem("pirarucu:conta");
+  } catch { /* armazenamento bloqueado: segue sem lembrar */ }
+}
+
+function lerContaSalva() {
+  try {
+    return localStorage.getItem("pirarucu:conta");
+  } catch {
+    return null;
+  }
+}
+
+// Abas do painel do fiscalizador
+function ligarAbas() {
+  document.querySelectorAll(".aba").forEach((aba) => {
+    aba.addEventListener("click", () => mostrarAba(aba.dataset.aba));
+  });
+  mostrarAba(document.querySelector(".aba").dataset.aba);
+}
+
+function mostrarAba(id) {
+  document.querySelectorAll(".aba").forEach((aba) => {
+    const ativa = aba.dataset.aba === id;
+    aba.setAttribute("aria-selected", String(ativa));
+    $(aba.dataset.aba).classList.toggle("aba-oculta", !ativa);
+  });
+}
+
 // =====================================================================
 // 4) LEITURA COM .call() - NÃO GERA TRANSAÇÃO NEM CUSTA GAS
 // ---------------------------------------------------------------------
 // .call() vira um eth_call: o nó executa a função sobre o estado atual e
 // devolve o resultado, sem assinatura e sem alterar a blockchain. Serve
 // para funções view/pure e para os getters automáticos das variáveis
-// public (fiscalizador(), saldos(conta), participantes(conta), cotas(...)).
+// public (fiscalizador(), participantes(conta), cotas(conta), totalNegociadoWei()).
 //
 // Detalhes:
 //   - Promise.all dispara leituras independentes em paralelo.
@@ -238,7 +380,7 @@ async function aoTrocarRede() {
 
 async function atualizarTudo() {
   try {
-    await atualizarConta();
+    await carregarSaldos();
     if (contratoConfigurado()) {
       await Promise.all([carregarResumo(), carregarPeixes(), carregarEventos()]);
       await atualizarPapel();
@@ -247,47 +389,44 @@ async function atualizarTudo() {
     console.error(e);
     toast(`Não foi possível ler o contrato: ${mensagemDeErro(e)}`, true);
   }
-  renderizarPaineis();
-  renderizarPeixes();
+  renderizarTela();
   renderizarEventos();
 }
 
-async function atualizarConta() {
-  const conectado = Boolean(estado.conta);
-  $("infoConta").hidden = !conectado;
-  $("btnConectar").hidden = conectado;
-  if (!conectado) {
+// Partes da tela que dependem da conta ativa
+function renderizarTela() {
+  renderizarContas();
+  renderizarPaineis();
+  renderizarPeixes();
+}
+
+// Saldo em ETH de todas as contas conectadas (aparece no menu de troca)
+async function carregarSaldos() {
+  const saldos = await Promise.all(
+    estado.contas.map((c) => estado.web3Carteira.eth.getBalance(c).catch(() => null)),
+  );
+  estado.contas.forEach((c, i) => {
+    if (saldos[i] !== null) estado.saldosContas.set(c.toLowerCase(), BigInt(saldos[i]));
+  });
+}
+
+// Papel da conta ativa, lido do contrato (getter público "participantes")
+async function atualizarPapel() {
+  const conta = estado.conta;
+  if (!conta) {
     estado.papel = 0;
     return;
   }
-  $("endereco").textContent = curto(estado.conta);
-  $("endereco").href = `${SEPOLIA.explorer}/address/${estado.conta}`;
-  const saldo = await estado.web3Carteira.eth.getBalance(estado.conta);
-  $("saldoEth").textContent = `${eth(saldo)} ETH`;
-}
-
-async function atualizarPapel() {
-  estado.papel = 0;
-  estado.nome = "";
-  estado.ativo = true;
-  const selo = $("papel");
-  if (!estado.conta) return;
-  if (ePrincipal()) {
-    selo.textContent = "Fiscalizador principal (dono)";
-    selo.className = "selo fiscal";
-    return;
+  let papel = 0;
+  let nome = "";
+  if (!ePrincipal()) {
+    const p = await estado.contratoLeitura.methods.participantes(conta).call();
+    papel = Number(p.papel);
+    nome = p.nome;
   }
-  const p = await estado.contratoLeitura.methods.participantes(estado.conta).call();
-  estado.papel = Number(p.papel);
-  estado.nome = p.nome;
-  estado.ativo = Boolean(p.ativo);
-  if (!estado.papel) {
-    selo.textContent = "Sem papel";
-    selo.className = "selo";
-    return;
-  }
-  selo.textContent = `${PAPEIS[estado.papel]} · ${p.nome}${estado.ativo ? "" : " (suspenso)"}`;
-  selo.className = `selo${!estado.ativo ? " erro" : estado.papel === PAPEL_FISCALIZADOR ? " fiscal" : ""}`;
+  if (estado.conta !== conta) return; // a conta mudou durante a leitura
+  estado.papel = papel;
+  estado.nome = nome;
 }
 
 async function carregarResumo() {
@@ -325,9 +464,8 @@ function normalizarPeixe(p) {
     comprimentoCm: Number(p.comprimentoCm),
     pesoGramas: Number(p.pesoGramas),
     local: p.local,
-    temperaturaC: Number(p.temperaturaC),
-    armazenado: Boolean(p.armazenado),
     preco: BigInt(p.preco),
+    valorPago: BigInt(p.valorPago),
     etapa: Number(p.etapa),
     capturadoEm: Number(p.capturadoEm),
   };
@@ -342,17 +480,17 @@ function normalizarPeixe(p) {
 // de cada peixe (a linha do tempo na consulta por lacre).
 //
 // Detalhes de carregarEventos():
-//   - "allEvents" traz todos os 10 eventos do contrato de uma vez; a ABI
+//   - "allEvents" traz todos os 6 eventos do contrato de uma vez; a ABI
 //     decodifica os argumentos em ev.returnValues.
 //   - Começa no bloco do deploy (CONTRATO.blocoDeploy), e não no bloco 0.
 //   - RPCs públicos limitam o intervalo de eth_getLogs, então a busca é
 //     feita em lotes de PASSO_EVENTOS blocos.
 //   - Guarda o último bloco lido: nas próximas atualizações, busca só os
-//     blocos novos.
-//   - Os eventos ParticipanteCadastrado e ParticipanteAtivoAlterado alimentam
-//     o mapa endereço -> { nome, papel, ativo }, usado para mostrar
-//     "Comunidade X" em vez de 0x1234…abcd e para esconder a compra de
-//     peixes de vendedores suspensos.
+//     blocos novos. Duas atualizações ao mesmo tempo (ex.: fim de uma
+//     transação + troca de conta) podem ler o mesmo trecho; a chave
+//     "hash:índice" impede que um evento apareça duas vezes.
+//   - O evento ParticipanteCadastrado alimenta o mapa endereço -> { nome,
+//     papel }, usado para mostrar "Comunidade X" em vez de 0x1234…abcd.
 // =====================================================================
 async function carregarEventos() {
   const atual = Number(await estado.web3Leitura.eth.getBlockNumber());
@@ -369,16 +507,16 @@ async function carregarEventos() {
     novos.push(...lote);
   }
   for (const ev of novos) {
+    const chave = `${ev.transactionHash}:${ev.logIndex}`;
+    if (estado.chavesEventos.has(chave)) continue;
+    estado.chavesEventos.add(chave);
+    estado.eventos.push(ev);
     const v = ev.returnValues;
     if (ev.event === "ParticipanteCadastrado") {
-      estado.participantes.set(v.conta.toLowerCase(), { nome: v.nome, papel: Number(v.papel), ativo: true });
-    } else if (ev.event === "ParticipanteAtivoAlterado") {
-      const p = estado.participantes.get(v.conta.toLowerCase());
-      if (p) p.ativo = Boolean(v.ativo);
+      estado.participantes.set(v.conta.toLowerCase(), { nome: v.nome, papel: Number(v.papel) });
     }
   }
-  estado.eventos.push(...novos);
-  estado.ultimoBlocoEventos = atual;
+  estado.ultimoBlocoEventos = Math.max(estado.ultimoBlocoEventos ?? 0, atual);
 }
 
 // =====================================================================
@@ -498,33 +636,12 @@ function ligarFormularios() {
     return [`Autorizar manejo (${adultos} adultos)`, metodos().autorizarManejo(comunidade, adultos)];
   });
 
-  ligarFormulario("formAtivo", (e) => {
-    const conta = e.conta.value.trim();
-    if (!Web3.utils.isAddress(conta)) {
-      toast("Endereço de carteira inválido.", true);
-      return null;
-    }
-    const reativar = e.acao.value === "reativar";
-    return [`${reativar ? "Reativar" : "Suspender"} ${nomeDe(conta)}`, metodos().definirAtivo(conta, reativar)];
-  });
-
-  ligarFormulario("formApreender", (e) => [
-    `Apreender peixe #${e.idPeixe.value}`,
-    metodos().apreender(e.idPeixe.value, e.motivo.value.trim()),
-  ]);
-
   ligarFormulario("formCaptura", (e) => {
     const lacre = e.lacre.value.trim().toUpperCase();
     const cm = Math.round(Number(e.comprimento.value) * 100);
     const gramas = Math.round(Number(e.peso.value) * 1000);
     return [`Registrar peixe ${lacre}`, metodos().registrarCaptura(lacre, cm, gramas, e.local.value.trim())];
   });
-}
-
-async function sacarTudo() {
-  const saldo = await estado.contratoLeitura.methods.saldos(estado.conta).call();
-  if (BigInt(saldo) === 0n) return toast("Você não tem saldo de vendas para sacar.", true);
-  await enviar(`Sacar ${eth(saldo)} ETH`, metodos().sacar(saldo), 0n, $("btnSacar"));
 }
 
 async function consultarLacre(ev) {
@@ -566,24 +683,24 @@ async function consultarLacre(ev) {
 // esconder botões é só conveniência, não segurança.
 // =====================================================================
 
-// Fiscalizador principal: quem implantou o contrato (cadastra e suspende)
+// Fiscalizador: quem implantou o contrato (dono). Igual ao modificador
+// apenasFiscalizador do contrato.
 function ePrincipal() {
-  return Boolean(estado.conta && estado.fiscalizador
-    && estado.conta.toLowerCase() === estado.fiscalizador.toLowerCase());
-}
-
-// Igual a eFiscalizador() do contrato: o principal ou um adicional ativo
-function eFiscalizador() {
-  return ePrincipal() || (estado.papel === PAPEL_FISCALIZADOR && estado.ativo);
-}
-
-function vendedorAtivo(endereco) {
-  const p = estado.participantes.get(endereco.toLowerCase());
-  return !p || p.ativo;
+  return mesmoEndereco(estado.conta, estado.fiscalizador);
 }
 
 function eMeu(endereco) {
-  return Boolean(estado.conta && endereco.toLowerCase() === estado.conta.toLowerCase());
+  return mesmoEndereco(endereco, estado.conta);
+}
+
+// Endereços podem vir com letras maiúsculas (checksum) ou minúsculas
+function mesmoEndereco(a, b) {
+  return Boolean(a && b && a.toLowerCase() === b.toLowerCase());
+}
+
+// A conta ativa pode comprar este peixe? (o contrato confere o mesmo em comprar)
+function podeComprar(p) {
+  return !eMeu(p.dono) && p.preco > 0n && estado.papel > 0 && estado.papel === proximoPapel(p.etapa);
 }
 
 // Quem pode comprar em cada etapa (igual a _proximoPapel do contrato):
@@ -592,42 +709,87 @@ function proximoPapel(etapa) {
   return etapa < 2 ? etapa + 2 : 0;
 }
 
+// Nome e papel de uma conta, para o menu de troca e a lista de transações.
+// A conta ativa usa o que foi lido do contrato; as outras, o mapa montado
+// pelos eventos ParticipanteCadastrado.
+function rotuloConta(endereco) {
+  if (mesmoEndereco(endereco, estado.fiscalizador)) return { nome: "Fiscalizador", papel: "Dono do contrato" };
+  const ativa = eMeu(endereco) && estado.papel > 0;
+  const p = ativa ? { nome: estado.nome, papel: estado.papel } : estado.participantes.get(endereco.toLowerCase());
+  if (!p) return { nome: curto(endereco), papel: "Sem papel" };
+  return { nome: p.nome, papel: PAPEIS[p.papel] };
+}
+
+// Cor fixa por endereço, para reconhecer cada conta de relance
+function avatar(endereco, classe = "") {
+  const tom = parseInt(endereco.slice(2, 8), 16) % 360;
+  const nome = rotuloConta(endereco).nome.replace(/^0x/, "");
+  return el("span", { class: `avatar ${classe}`.trim(), style: `--cor: hsl(${tom} 45% 38%)`, "aria-hidden": "true" },
+    nome.charAt(0));
+}
+
+// Cabeçalho: botão da conta ativa e o menu suspenso com todas as contas
+function renderizarContas() {
+  const conectado = Boolean(estado.conta);
+  $("infoConta").hidden = !conectado;
+  $("btnConectar").hidden = conectado;
+  if (!conectado) {
+    fecharMenuContas();
+    return;
+  }
+  const r = rotuloConta(estado.conta);
+  const saldo = estado.saldosContas.get(estado.conta.toLowerCase());
+  $("contaAvatar").replaceWith(Object.assign(avatar(estado.conta), { id: "contaAvatar" }));
+  $("contaNome").textContent = r.nome;
+  $("papel").textContent = `${r.papel} · ${curto(estado.conta)}`;
+  $("saldoEth").textContent = saldo === undefined ? "" : `${eth(saldo)} ETH`;
+  $("endereco").href = `${SEPOLIA.explorer}/address/${estado.conta}`;
+
+  $("listaContas").replaceChildren(...estado.contas.map((c) => {
+    const rc = rotuloConta(c);
+    const s = estado.saldosContas.get(c.toLowerCase());
+    const item = el("button", { class: `item-conta${eMeu(c) ? " ativa" : ""}`, type: "button" },
+      avatar(c),
+      el("span", {},
+        el("span", { class: "nome" }, rc.nome),
+        el("span", { class: "sub" }, `${rc.papel} · `, el("span", { class: "mono" }, curto(c)))),
+      el("span", { class: "lado" }, s === undefined ? "" : `${eth(s)} ETH`));
+    item.addEventListener("click", () => trocarConta(c));
+    return el("li", {}, item);
+  }));
+}
+
 async function renderizarPaineis() {
   const conectado = Boolean(estado.conta) && contratoConfigurado();
-  $("painelFiscal").hidden = !(conectado && eFiscalizador());
+  // Painel administrativo: só o dono do contrato (o fiscalizador)
+  $("painelFiscal").hidden = !(conectado && ePrincipal());
   $("painelComunidade").hidden = !(conectado && estado.papel === 1);
-  $("painelSaldo").hidden = !(conectado && estado.papel > 0 && estado.papel !== PAPEL_FISCALIZADOR);
+  $("totalParticipantes").textContent = contratoConfigurado() ? String(estado.participantes.size) : "–";
 
-  // Cadastrar e suspender: só o fiscalizador principal
-  document.querySelectorAll(".so-principal").forEach((f) => { f.hidden = !ePrincipal(); });
-  $("dicaFiscal").textContent = ePrincipal()
-    ? "Você é o fiscalizador principal: cadastra e suspende participantes, autoriza o manejo e apreende peixes."
-    : "Você é fiscalizador adicional: autoriza o manejo e apreende peixes. Cadastro e suspensão são do fiscalizador principal.";
+  // Contas conectadas ainda sem papel, como sugestão no formulário de cadastro
+  $("listaSemPapel").replaceChildren(...estado.contas
+    .filter((c) => !mesmoEndereco(c, estado.fiscalizador) && !estado.participantes.has(c.toLowerCase()))
+    .map((c) => el("option", { value: c }, `Conta conectada ${curto(c)}`)));
 
-  // Participantes conhecidos (pelos eventos) como sugestão nos formulários do fiscalizador
-  const opcoes = (filtro) => [...estado.participantes.entries()]
-    .filter(([, p]) => filtro(p))
-    .map(([conta, p]) => el("option", { value: conta }, `${p.nome} · ${PAPEIS[p.papel]}${p.ativo ? "" : " (suspenso)"}`));
-  $("listaComunidades").replaceChildren(...opcoes((p) => p.papel === 1));
-  $("listaParticipantes").replaceChildren(...opcoes(() => true));
+  // Comunidades conhecidas (pelos eventos) como sugestão no formulário de manejo
+  $("listaComunidades").replaceChildren(...[...estado.participantes.entries()]
+    .filter(([, p]) => p.papel === 1)
+    .map(([conta, p]) => el("option", { value: conta }, `${p.nome} · ${PAPEIS[p.papel]}`)));
 
-  if (!conectado) return;
+  if (!conectado || estado.papel !== 1) return;
+  const conta = estado.conta;
   try {
-    if (estado.papel > 0) {
-      const saldo = await estado.contratoLeitura.methods.saldos(estado.conta).call();
-      $("saldoVendas").textContent = eth(saldo);
-    }
-    if (estado.papel === 1 && !estado.ativo) {
-      $("infoCota").textContent = "Sua conta está suspensa pelo fiscalizador: não é possível registrar capturas.";
-    } else if (estado.papel === 1) {
-      const cota = await estado.contratoLeitura.methods.cotas(estado.conta).call();
-      const limite = Number(cota.limite);
-      const capturados = Number(cota.capturados);
-      $("infoCota").textContent = limite === 0
-        ? "Sua comunidade ainda não foi autorizada pelo fiscalizador."
-        : `Cota: ${capturados} de ${limite} peixes capturados (${limite - capturados} restantes, `
-          + `${cota.adultosContados} adultos contados). Tamanho mínimo: 1,50 m.`;
-    }
+    const cota = await estado.contratoLeitura.methods.cotas(conta).call();
+    if (estado.conta !== conta) return; // trocou de conta durante a leitura
+    const limite = Number(cota.limite);
+    const capturados = Number(cota.capturados);
+    const barra = $("barraCota");
+    barra.style.width = limite ? `${Math.min(100, (capturados / limite) * 100)}%` : "0";
+    barra.classList.toggle("cheia", limite > 0 && capturados >= limite);
+    $("infoCota").textContent = limite === 0
+      ? "Sua comunidade ainda não foi autorizada pelo fiscalizador."
+      : `Cota: ${capturados} de ${limite} peixes capturados (${limite - capturados} restantes, `
+        + `${cota.adultosContados} adultos contados).`;
   } catch (e) {
     console.error(e);
   }
@@ -639,11 +801,11 @@ function renderizarPeixes() {
     alvo.replaceChildren(el("p", { class: "vazio" }, "Configure o endereço do contrato em contrato.js."));
     return;
   }
-  const filtro = $("filtroPeixes").value;
+  const filtro = estado.filtro;
   let lista = [...estado.peixes].reverse(); // mais novos primeiro
   if (filtro === "meus") lista = lista.filter((p) => eMeu(p.dono));
   if (filtro === "comprar") {
-    lista = lista.filter((p) => p.preco > 0n && estado.papel && proximoPapel(p.etapa) === estado.papel);
+    lista = lista.filter(podeComprar);
   }
   if (!lista.length) {
     alvo.replaceChildren(el("p", { class: "vazio" }, "Nenhum peixe para mostrar."));
@@ -661,20 +823,36 @@ function detalhesPeixe(p) {
     ["Dono atual", nomeDe(p.dono)],
     ["Capturado em", new Date(p.capturadoEm * 1000).toLocaleString("pt-BR")],
   ];
-  if (p.armazenado) linhas.push(["Armazenamento", `${p.temperaturaC} °C`]);
+  if (p.valorPago > 0n) linhas.push(["Dono pagou", `${eth(p.valorPago)} ETH`]);
   if (p.preco > 0n) linhas.push(["À venda por", `${eth(p.preco)} ETH`]);
-  return el("dl", {}, ...linhas.flatMap(([k, v]) => [
+  return el("dl", {}, ...linhas.map(([k, v]) => el("div", {},
     el("dt", {}, k),
     el("dd", k === "À venda por" ? { class: "preco" } : {}, v),
-  ]));
+  )));
+}
+
+// Trilha comunidade -> frigorífico -> mercado -> consumidor (o enum Etapa do
+// contrato), com a etapa atual destacada.
+function trilhaDoPeixe(p) {
+  const passos = ["Comunidade", "Frigorífico", "Mercado", "Consumidor"];
+  return el("ol", { class: "trilha", "aria-label": `Etapa: ${ETAPAS[p.etapa]}` },
+    ...passos.map((nome, i) => {
+      let classe = "";
+      if (i < p.etapa) classe = "feito";
+      if (i === p.etapa) classe = p.etapa === 3 ? "feito atual" : "atual";
+      return el("li", classe ? { class: classe } : {}, nome);
+    }));
 }
 
 function cartaoPeixe(p) {
   const acoes = acoesDoPeixe(p);
-  return el("article", { class: `peixe etapa-${p.etapa}` },
+  const etiquetas = [el("span", { class: "etiqueta" }, ETAPAS[p.etapa])];
+  if (p.preco > 0n) etiquetas.unshift(el("span", { class: "etiqueta venda" }, "À venda"));
+  return el("article", { class: "peixe" },
     el("div", { class: "peixe-topo" },
-      el("strong", {}, `#${p.id} · ${p.lacre}`),
-      el("span", { class: "etapa" }, ETAPAS[p.etapa])),
+      el("div", {}, el("span", { class: "lacre" }, p.lacre), el("span", { class: "id" }, `peixe #${p.id}`)),
+      el("div", { class: "etiquetas" }, ...etiquetas)),
+    trilhaDoPeixe(p),
     detalhesPeixe(p),
     acoes.length ? el("div", { class: "acoes" }, ...acoes) : null,
   );
@@ -691,21 +869,12 @@ function botao(texto, classe, aoClicar) {
 function acoesDoPeixe(p) {
   if (!estado.conta || !estado.naSepolia) return [];
   const acoes = [];
-  // Conta suspensa não negocia (o contrato também confere)
-  const meu = eMeu(p.dono) && estado.ativo;
+  const meu = eMeu(p.dono);
 
-  if (meu && p.etapa === 1 && !p.armazenado) {
-    const temp = el("input", { type: "number", step: "1", placeholder: "Temperatura °C (ex.: -18)" });
-    acoes.push(el("div", { class: "acao" }, temp, botao("Registrar armazenamento", "", (b) => {
-      const t = Number(temp.value);
-      if (temp.value === "" || !Number.isInteger(t)) return toast("Informe a temperatura em °C (número inteiro).", true);
-      enviar(`Armazenar peixe #${p.id} a ${t} °C`, metodos().registrarArmazenamento(p.id, t), 0n, b);
-    })));
-  }
-  // Na comunidade pode vender direto; no frigorífico, só depois do armazenamento
-  if (meu && p.preco === 0n && (p.etapa === 0 || (p.etapa === 1 && p.armazenado))) {
+  // Comunidade e frigorífico vendem para o próximo elo; chamar de novo troca o preço
+  if (meu && proximoPapel(p.etapa) !== 0) {
     const preco = el("input", { type: "text", inputmode: "decimal", placeholder: "Preço em ETH (ex.: 0.01)" });
-    acoes.push(el("div", { class: "acao" }, preco, botao("Pôr à venda", "", (b) => {
+    acoes.push(el("div", { class: "acao" }, preco, botao(p.preco > 0n ? "Mudar preço" : "Pôr à venda", "", (b) => {
       const texto = preco.value.trim().replace(",", ".");
       if (!(Number(texto) > 0)) return toast("Informe um preço em ETH maior que zero.", true);
       let wei;
@@ -717,26 +886,14 @@ function acoesDoPeixe(p) {
       enviar(`Pôr peixe #${p.id} à venda por ${texto} ETH`, metodos().colocarAVenda(p.id, wei), 0n, b);
     })));
   }
-  if (meu && p.preco > 0n) {
-    acoes.push(botao("Cancelar venda", "btn-claro", (b) =>
-      enviar(`Cancelar venda do peixe #${p.id}`, metodos().cancelarVenda(p.id), 0n, b)));
-  }
-  if (!eMeu(p.dono) && p.preco > 0n && estado.ativo && vendedorAtivo(p.dono)
-    && estado.papel === proximoPapel(p.etapa)) {
-    // Envia ETH junto com a transação (value)
+  if (podeComprar(p)) {
+    // Envia ETH junto com a transação (value); o contrato repassa direto ao vendedor
     acoes.push(botao(`Comprar por ${eth(p.preco)} ETH`, "btn-compra", (b) =>
       enviar(`Comprar peixe #${p.id} por ${eth(p.preco)} ETH`, metodos().comprar(p.id), p.preco, b)));
   }
   if (meu && p.etapa === 2) {
     acoes.push(botao("Registrar venda ao consumidor", "", (b) =>
       enviar(`Venda ao consumidor do peixe #${p.id}`, metodos().registrarVendaAoConsumidor(p.id), 0n, b)));
-  }
-  if (eFiscalizador() && p.etapa < 3) {
-    const motivo = el("input", { type: "text", maxlength: "100", placeholder: "Motivo da apreensão" });
-    acoes.push(el("div", { class: "acao" }, motivo, botao("Apreender", "btn-perigo", (b) => {
-      if (!motivo.value.trim()) return toast("Informe o motivo da apreensão.", true);
-      enviar(`Apreender peixe #${p.id}`, metodos().apreender(p.id, motivo.value.trim()), 0n, b);
-    })));
   }
   return acoes;
 }
@@ -760,8 +917,6 @@ function descreverEvento(e) {
   switch (e.event) {
     case "ParticipanteCadastrado":
       return `${PAPEIS[Number(v.papel)]} "${v.nome}" cadastrado (${curto(v.conta)}).`;
-    case "ParticipanteAtivoAlterado":
-      return `${nomeDe(v.conta)} ${v.ativo ? "reativado" : "suspenso"} pelo fiscalizador principal.`;
     case "ManejoAutorizado":
       return `Manejo autorizado para ${nomeDe(v.comunidade)}: ${v.adultosContados} adultos, cota de ${v.limite} peixes.`;
     case "PeixeRegistrado":
@@ -769,19 +924,13 @@ function descreverEvento(e) {
         + `${metros(Number(v.comprimentoCm))} m, ${kg(Number(v.pesoGramas))} kg.`;
     case "PeixeAVenda":
       return `Peixe #${v.id} posto à venda por ${nomeDe(v.vendedor)} por ${eth(v.preco)} ETH.`;
-    case "VendaCancelada":
-      return `${nomeDe(v.vendedor)} tirou o peixe #${v.id} da venda.`;
     case "PeixeVendido":
+      // diferenca é int256: pode ser negativa quando o vendedor vende por menos do que pagou
       return `Peixe #${v.id} vendido de ${nomeDe(v.vendedor)} para ${nomeDe(v.comprador)} `
-        + `por ${eth(v.valor)} ETH (${ETAPAS[Number(v.novaEtapa)].toLowerCase()}).`;
-    case "ArmazenamentoRegistrado":
-      return `Peixe #${v.id} armazenado por ${nomeDe(v.frigorifico)} a ${v.temperaturaC} °C.`;
+        + `por ${eth(v.valor)} ETH (${ETAPAS[Number(v.novaEtapa)].toLowerCase()}). `
+        + `Diferença para o vendedor: ${ethComSinal(v.diferenca)} ETH.`;
     case "VendidoAoConsumidor":
       return `Peixe #${v.id} vendido ao consumidor por ${nomeDe(v.mercado)}.`;
-    case "PeixeApreendido":
-      return `Peixe #${v.id} apreendido pelo fiscalizador. Motivo: ${v.motivo}.`;
-    case "Saque":
-      return `${nomeDe(v.conta)} sacou ${eth(v.valor)} ETH.`;
     default:
       return e.event || "Evento";
   }
@@ -794,7 +943,9 @@ function adicionarTx(descricao) {
   lista.querySelector(".vazio")?.remove();
   const status = el("span", { class: "status assinatura" }, "aguardando assinatura");
   const detalhe = el("div", { class: "hash" });
-  const item = el("li", {}, el("div", { class: "tx-topo" }, el("span", {}, descricao), status), detalhe);
+  // Com várias contas conectadas, mostra qual delas assinou
+  const de = el("div", { class: "tx-de" }, avatar(estado.conta, "pequeno"), `por ${rotuloConta(estado.conta).nome}`);
+  const item = el("li", {}, el("div", { class: "tx-topo" }, el("span", {}, descricao), status), de, detalhe);
   item._status = status;
   item._detalhe = detalhe;
   lista.prepend(item);
@@ -826,10 +977,7 @@ function atualizarTx(item, situacao, hash, mensagem) {
 // =====================================================================
 
 const MENSAGENS = {
-  ApenasFiscalizador: () => "Só um fiscalizador ativo pode fazer isso.",
-  ApenasFiscalizadorPrincipal: () => "Só o fiscalizador principal (quem implantou o contrato) pode fazer isso.",
-  ParticipanteNaoEncontrado: (a) => `A conta ${curto(a.conta)} não é um participante cadastrado.`,
-  ParticipanteInativo: (a) => `A conta ${nomeDe(a.conta)} está suspensa pelo fiscalizador.`,
+  ApenasFiscalizador: () => "Só o fiscalizador (quem implantou o contrato) pode fazer isso.",
   PapelInvalido: (a) => `Ação permitida só para ${PAPEIS[Number(a.esperado)]}. Sua conta: ${PAPEIS[Number(a.atual)]}.`,
   ParticipanteJaCadastrado: (a) => `A conta ${curto(a.conta)} já está cadastrada, e o papel não pode ser trocado.`,
   ComunidadeNaoAutorizada: () => "Esta comunidade ainda não foi autorizada pelo fiscalizador.",
@@ -845,12 +993,9 @@ const MENSAGENS = {
   NaoEDonoDoPeixe: (a) => `Só o dono atual do peixe #${a.id} pode fazer isso.`,
   EtapaInvalida: (a) => `O peixe #${a.id} está "${ETAPAS[Number(a.atual)]}", mas a ação exige "${ETAPAS[Number(a.esperada)]}".`,
   PeixeNaoNegociavel: (a) => `O peixe #${a.id} está "${ETAPAS[Number(a.atual)]}" e não pode mais ser negociado.`,
-  ArmazenamentoNaoRegistrado: (a) => `Registre a temperatura de armazenamento do peixe #${a.id} antes de vendê-lo.`,
-  TemperaturaInadequada: (a) => `${a.informada} °C está fora da cadeia do frio (de ${a.minima} a ${a.maxima} °C).`,
   PeixeNaoEstaAVenda: (a) => `O peixe #${a.id} não está à venda.`,
   ValorIncorreto: (a) => `Valor incorreto: o preço é ${eth(a.esperado)} ETH e foram enviados ${eth(a.enviado)} ETH.`,
-  SaldoInsuficiente: (a) => `Saldo insuficiente: disponível ${eth(a.disponivel)} ETH, pedido ${eth(a.solicitado)} ETH.`,
-  FalhaNoSaque: () => "A transferência do saque falhou.",
+  FalhaNoPagamento: (a) => `O pagamento de ${eth(a.valor)} ETH para ${nomeDe(a.vendedor)} falhou; a compra foi desfeita.`,
 };
 
 function montarSeletoresDeErro(abi) {
@@ -926,8 +1071,8 @@ function mensagemDeErro(e) {
 // =====================================================================
 // 9) UTILITÁRIOS
 // ---------------------------------------------------------------------
-// Dados on-chain também são entrada não confiável: nomes, lacres, locais
-// e motivos foram digitados por alguém. Por isso a tela é montada com
+// Dados on-chain também são entrada não confiável: nomes, lacres e locais
+// foram digitados por alguém. Por isso a tela é montada com
 // el(), que usa textContent (nunca innerHTML) e evita XSS.
 // =====================================================================
 
@@ -951,17 +1096,22 @@ function curto(endereco) {
   return endereco ? `${endereco.slice(0, 6)}…${endereco.slice(-4)}` : "–";
 }
 
+// Nome para textos corridos (eventos, detalhes do peixe), com "(você)" na conta ativa
 function nomeDe(endereco) {
   if (!endereco) return "–";
-  if (estado.fiscalizador && endereco.toLowerCase() === estado.fiscalizador.toLowerCase()) return "Fiscalizador principal";
-  const p = estado.participantes.get(endereco.toLowerCase());
-  const nome = p ? p.nome : curto(endereco);
+  const { nome } = rotuloConta(endereco);
   return eMeu(endereco) ? `${nome} (você)` : nome;
 }
 
 function eth(wei) {
   const valor = Number(Web3.utils.fromWei(BigInt(wei).toString(), "ether"));
   return valor.toLocaleString("pt-BR", { maximumFractionDigits: 6 });
+}
+
+// int256 do contrato (pode ser negativo): mostra o sinal explicitamente
+function ethComSinal(wei) {
+  const v = BigInt(wei);
+  return `${v < 0n ? "−" : "+"}${eth(v < 0n ? -v : v)}`;
 }
 
 function metros(cm) {

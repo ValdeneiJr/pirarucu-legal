@@ -6,6 +6,9 @@
   <title>Pirarucu Legal · dApp na Sepolia</title>
   <meta name="description" content="Rastreabilidade do pirarucu de manejo com contrato inteligente na Ethereum Sepolia.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐟</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js" defer></script>
   <script src="contrato.js" defer></script>
@@ -14,21 +17,49 @@
 </head>
 <body>
   <header class="topo">
-    <div class="marca">
-      <span class="logo" aria-hidden="true">🐟</span>
-      <div>
-        <strong>Pirarucu Legal</strong>
-        <small>rastreabilidade do pirarucu de manejo</small>
+    <div class="topo-linha">
+      <div class="marca">
+        <svg class="logo" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M3 24c5-8 14-12.5 24-11.5 3.4.3 6.4 1.6 9 3.5v16c-2.6 1.9-5.6 3.2-9 3.5C17 36.5 8 32 3 24z" fill="#e8efe9"/>
+          <path d="M35 16l10-7-3 15 3 15-10-7z" fill="#d9573f"/>
+          <circle cx="13" cy="22" r="2.2" fill="#0e3b2c"/>
+        </svg>
+        <div>
+          <strong>Pirarucu Legal</strong>
+          <small>rastreabilidade do pirarucu de manejo</small>
+        </div>
       </div>
-    </div>
-    <div class="carteira">
-      <span id="rede" class="selo">sem carteira</span>
-      <div id="infoConta" class="info-conta" hidden>
-        <span id="papel" class="selo"></span>
-        <a id="endereco" target="_blank" rel="noopener"></a>
-        <span id="saldoEth" class="saldo"></span>
+
+      <div class="carteira">
+        <span id="rede" class="selo">sem carteira</span>
+        <button id="btnConectar" class="btn btn-claro">Conectar carteira</button>
+
+        <!-- Conta ativa: abre o menu com todas as contas conectadas -->
+        <div id="infoConta" class="conta" hidden>
+          <button id="btnConta" class="conta-botao" aria-haspopup="true" aria-expanded="false" aria-controls="menuContas" title="Trocar de conta">
+            <span id="contaAvatar" class="avatar"></span>
+            <span class="conta-texto">
+              <strong id="contaNome"></strong>
+              <small id="papel"></small>
+            </span>
+            <span id="saldoEth" class="saldo"></span>
+            <svg class="seta" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+
+          <div id="menuContas" class="menu" hidden>
+            <div class="menu-topo">
+              <strong>Trocar de conta</strong>
+              <small>Escolha a conta que vai agir no site, sem abrir a MetaMask.</small>
+            </div>
+            <ul id="listaContas" class="lista-contas"></ul>
+            <div class="menu-acoes">
+              <button id="btnMaisContas" class="btn btn-claro btn-pequeno">Conectar outras contas</button>
+              <a id="endereco" target="_blank" rel="noopener">Ver no Etherscan</a>
+              <button id="btnDesconectar" class="btn-link perigo">Desconectar</button>
+            </div>
+          </div>
+        </div>
       </div>
-      <button id="btnConectar" class="btn">Conectar carteira</button>
     </div>
   </header>
 
@@ -44,108 +75,137 @@
     O endereço do contrato ainda não foi configurado em <code>contrato.js</code>.
   </div>
 
+  <section class="heroi">
+    <div class="heroi-texto">
+      <span class="sobretitulo">Ethereum Sepolia · Decreto AM nº 36.083/2015</span>
+      <h1>Do lago ao mercado, cada pirarucu com lacre e história.</h1>
+      <p>O fiscalizador autoriza a cota, a comunidade registra cada peixe pelo lacre, e o frigorífico e o mercado compram pagando em ETH direto ao vendedor. Cada passo fica gravado na blockchain.</p>
+    </div>
+  </section>
+
   <main>
     <section class="resumo">
-      <div class="cartao-numero"><span>Peixes registrados</span><strong id="totalPeixes">–</strong></div>
-      <div class="cartao-numero"><span>ETH negociado na cadeia</span><strong id="totalNegociado">–</strong></div>
-      <div class="cartao-numero"><span>Fiscalizador principal</span><a id="linkFiscal" target="_blank" rel="noopener">–</a></div>
-      <div class="cartao-numero"><span>Contrato</span><a id="linkContrato" target="_blank" rel="noopener">–</a></div>
+      <div class="cartao-numero">
+        <span>Peixes registrados</span>
+        <strong id="totalPeixes">–</strong>
+      </div>
+      <div class="cartao-numero">
+        <span>ETH negociado na cadeia</span>
+        <strong id="totalNegociado">–</strong>
+      </div>
+      <div class="cartao-numero">
+        <span>Participantes cadastrados</span>
+        <strong id="totalParticipantes">–</strong>
+      </div>
+      <div class="cartao-numero">
+        <span>Contrato</span>
+        <a id="linkContrato" class="mono" target="_blank" rel="noopener">–</a>
+        <small>fiscal: <a id="linkFiscal" class="mono" target="_blank" rel="noopener">–</a></small>
+      </div>
     </section>
 
-    <!-- Só aparece para fiscalizadores (o principal e os adicionais ativos) -->
-    <section id="painelFiscal" class="card destaque" hidden>
-      <h2>Painel do fiscalizador</h2>
-      <p class="dica" id="dicaFiscal">Só fiscalizadores veem este painel.</p>
-      <div class="grade">
-        <!-- Cadastrar e suspender: só o fiscalizador principal (dono do contrato) -->
-        <form id="formCadastrar" class="form so-principal">
-          <h3>Cadastrar participante</h3>
-          <label>Endereço da carteira <input name="conta" placeholder="0x…" required></label>
+    <!-- Só aparece para o fiscalizador (dono do contrato) -->
+    <section id="painelFiscal" class="card destaque-fiscal" hidden>
+      <div class="card-cabecalho">
+        <div>
+          <span class="sobretitulo">Fiscalização</span>
+          <h2>Painel do fiscalizador</h2>
+          <p class="dica">Só o dono do contrato vê este painel: cadastra os participantes e autoriza o manejo de cada comunidade.</p>
+        </div>
+      </div>
+
+      <div class="abas" role="tablist" aria-label="Ações do fiscalizador">
+        <button class="aba" role="tab" data-aba="formCadastrar">Cadastrar participante</button>
+        <button class="aba" role="tab" data-aba="formAutorizar">Autorizar manejo</button>
+      </div>
+
+      <form id="formCadastrar" class="form painel-aba" role="tabpanel">
+        <div class="campos">
+          <label class="largo">Endereço da carteira <input name="conta" list="listaSemPapel" placeholder="0x… ou escolha uma conta conectada" required autocomplete="off"></label>
+          <datalist id="listaSemPapel"></datalist>
           <label>Papel
             <select name="papel">
               <option value="1">Comunidade</option>
               <option value="2">Frigorífico</option>
               <option value="3">Mercado</option>
-              <option value="4">Fiscalizador adicional</option>
             </select>
           </label>
           <label>Nome <input name="nome" maxlength="60" placeholder="Comunidade Boa Esperança" required></label>
+        </div>
+        <div class="form-rodape">
+          <p class="dica">O papel não pode ser trocado depois do cadastro.</p>
           <button class="btn">Cadastrar</button>
-        </form>
+        </div>
+      </form>
 
-        <form id="formAutorizar" class="form">
-          <h3>Autorizar manejo</h3>
-          <label>Comunidade <input name="comunidade" list="listaComunidades" placeholder="0x…" required></label>
+      <form id="formAutorizar" class="form painel-aba" role="tabpanel">
+        <div class="campos">
+          <label class="largo">Comunidade <input name="comunidade" list="listaComunidades" placeholder="0x… ou escolha da lista" required autocomplete="off"></label>
           <datalist id="listaComunidades"></datalist>
           <label>Adultos contados no lago <input name="adultos" type="number" min="1" step="1" required></label>
+        </div>
+        <div class="form-rodape">
           <p class="dica" id="previaCota">A cota é 30% dos adultos contados.</p>
           <button class="btn">Autorizar</button>
-        </form>
+        </div>
+      </form>
 
-        <form id="formApreender" class="form">
-          <h3>Apreender peixe</h3>
-          <label>Id do peixe <input name="idPeixe" type="number" min="0" step="1" required></label>
-          <label>Motivo <input name="motivo" maxlength="100" placeholder="Sem guia de transporte" required></label>
-          <button class="btn btn-perigo">Apreender</button>
-        </form>
-
-        <form id="formAtivo" class="form so-principal">
-          <h3>Suspender ou reativar</h3>
-          <label>Participante <input name="conta" list="listaParticipantes" placeholder="0x…" required></label>
-          <datalist id="listaParticipantes"></datalist>
-          <label>Ação
-            <select name="acao">
-              <option value="suspender">Suspender</option>
-              <option value="reativar">Reativar</option>
-            </select>
-          </label>
-          <p class="dica">Suspenso, o participante não registra, não vende, não compra e não fiscaliza. O saque continua liberado.</p>
-          <button class="btn">Confirmar</button>
-        </form>
-      </div>
     </section>
 
     <!-- Só aparece para contas com papel Comunidade -->
     <section id="painelComunidade" class="card" hidden>
-      <h2>Registrar captura</h2>
-      <p id="infoCota" class="dica"></p>
-      <form id="formCaptura" class="form form-linha">
-        <label>Lacre <input name="lacre" maxlength="20" placeholder="AM-000101" required></label>
-        <label>Comprimento (m) <input name="comprimento" type="number" step="0.01" min="0" placeholder="1.92" required></label>
-        <label>Peso (kg) <input name="peso" type="number" step="0.001" min="0" placeholder="74.5" required></label>
-        <label>Lago / local <input name="local" maxlength="60" placeholder="Lago Mamirauá" required></label>
-        <button class="btn">Registrar peixe</button>
+      <div class="card-cabecalho">
+        <div>
+          <span class="sobretitulo">Comunidade</span>
+          <h2>Registrar captura</h2>
+        </div>
+      </div>
+      <div class="cota">
+        <div class="cota-barra"><span id="barraCota"></span></div>
+        <p id="infoCota" class="dica"></p>
+      </div>
+      <form id="formCaptura" class="form">
+        <div class="campos campos-4">
+          <label>Lacre <input name="lacre" maxlength="20" placeholder="AM-000101" required autocomplete="off"></label>
+          <label>Comprimento (m) <input name="comprimento" type="number" step="0.01" min="0" placeholder="1.92" required></label>
+          <label>Peso (kg) <input name="peso" type="number" step="0.001" min="0" placeholder="74.5" required></label>
+          <label>Lago / local <input name="local" maxlength="60" placeholder="Lago Mamirauá" required></label>
+        </div>
+        <div class="form-rodape">
+          <p class="dica">Tamanho mínimo: 1,50 m. Cada lacre só pode ser usado uma vez.</p>
+          <button class="btn">Registrar peixe</button>
+        </div>
       </form>
     </section>
 
-    <section id="painelSaldo" class="card" hidden>
-      <h2>Saldo de vendas</h2>
-      <div class="linha-saldo">
-        <p>Disponível para saque: <strong id="saldoVendas">0</strong> ETH</p>
-        <button id="btnSacar" class="btn">Sacar tudo</button>
-      </div>
-    </section>
-
     <section class="card">
-      <div class="cabecalho-card">
-        <h2>Peixes</h2>
+      <div class="card-cabecalho">
+        <div>
+          <span class="sobretitulo">Cadeia</span>
+          <h2>Peixes</h2>
+        </div>
         <div class="filtros">
-          <select id="filtroPeixes" aria-label="Filtrar peixes">
-            <option value="todos">Todos</option>
-            <option value="meus">Meus peixes</option>
-            <option value="comprar">À venda para mim</option>
-          </select>
-          <button id="btnAtualizar" class="btn btn-claro btn-pequeno">Atualizar</button>
+          <div id="filtroPeixes" class="segmentado" role="radiogroup" aria-label="Filtrar peixes">
+            <button role="radio" data-filtro="todos" aria-checked="true">Todos</button>
+            <button role="radio" data-filtro="meus" aria-checked="false">Meus</button>
+            <button role="radio" data-filtro="comprar" aria-checked="false">À venda para mim</button>
+          </div>
+          <button id="btnAtualizar" class="btn btn-claro btn-pequeno" title="Recarregar dados do contrato">Atualizar</button>
         </div>
       </div>
       <div id="listaPeixes" class="lista-peixes"><p class="vazio">Carregando…</p></div>
     </section>
 
-    <section class="card">
-      <h2>Consultar lacre</h2>
-      <p class="dica">Qualquer pessoa pode conferir a origem e o caminho de um peixe, mesmo sem carteira.</p>
-      <form id="formConsulta" class="form form-linha">
-        <label>Número do lacre <input name="lacre" maxlength="20" placeholder="AM-000101" required></label>
+    <section class="card card-consulta">
+      <div class="card-cabecalho">
+        <div>
+          <span class="sobretitulo">Consumidor</span>
+          <h2>Consultar lacre</h2>
+          <p class="dica">Qualquer pessoa pode conferir a origem e o caminho de um peixe, mesmo sem carteira.</p>
+        </div>
+      </div>
+      <form id="formConsulta" class="busca">
+        <input name="lacre" maxlength="20" placeholder="Digite o número do lacre, ex.: AM-000101" required aria-label="Número do lacre" autocomplete="off">
         <button class="btn">Consultar</button>
       </form>
       <div id="resultadoConsulta"></div>
