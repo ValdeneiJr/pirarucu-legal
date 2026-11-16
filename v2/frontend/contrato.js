@@ -10,8 +10,8 @@
 // que o Web3.js não usa. Colar a ABI completa do Remix também funciona.
 
 const CONTRATO = {
-  endereco: "0x50DDf0e5b8d7fC619E4dDbb03659508dA99dCcC9",
-  blocoDeploy: 12148464,
+  endereco: "0x54379BeFff83a3B314Fa560e0B0AAaac266D05ED",
+  blocoDeploy: 12148615,
   abi: [
     // constructor
     {"inputs": [], "stateMutability": "nonpayable", "type": "constructor"},
