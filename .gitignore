@@ -14,3 +14,8 @@ wheels/
 
 # Banco SQLite gerado ao rodar o nó
 data/
+
+# v2
+.pytest_cache/
+.vercel/
+node_modules/
