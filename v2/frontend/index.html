@@ -178,16 +178,30 @@
       </form>
     </section>
 
-    <section class="card">
+    <!-- Só o fiscalizador vê as cotas de todas as comunidades -->
+    <section id="cardCotas" class="card" hidden>
+      <div class="card-cabecalho">
+        <div>
+          <span class="sobretitulo">Manejo</span>
+          <h2>Cotas das comunidades</h2>
+          <p class="dica">A cota é 30% dos adultos contados no lago. Cada peixe registrado consome 1 da cota da comunidade.</p>
+        </div>
+      </div>
+      <div id="listaCotas" class="lista-cotas"><p class="vazio">Carregando…</p></div>
+    </section>
+
+    <!-- Peixes: o fiscalizador vê todos; cada participante vê os seus e os que estão à venda para ele -->
+    <section id="cardPeixes" class="card" hidden>
       <div class="card-cabecalho">
         <div>
           <span class="sobretitulo">Cadeia</span>
-          <h2>Peixes</h2>
+          <h2 id="tituloPeixes">Peixes</h2>
+          <p class="dica" id="dicaPeixes"></p>
         </div>
         <div class="filtros">
           <div id="filtroPeixes" class="segmentado" role="radiogroup" aria-label="Filtrar peixes">
-            <button role="radio" data-filtro="todos" aria-checked="true">Todos</button>
-            <button role="radio" data-filtro="meus" aria-checked="false">Meus</button>
+            <button role="radio" data-filtro="tudo" aria-checked="true">Tudo</button>
+            <button role="radio" data-filtro="meus" aria-checked="false">Meus peixes</button>
             <button role="radio" data-filtro="comprar" aria-checked="false">À venda para mim</button>
           </div>
           <button id="btnAtualizar" class="btn btn-claro btn-pequeno" title="Recarregar dados do contrato">Atualizar</button>
@@ -212,13 +226,14 @@
     </section>
 
     <div class="grade-2">
-      <section class="card">
+      <section id="cardTx" class="card" hidden>
         <h2>Minhas transações</h2>
         <ul id="listaTx" class="lista-tx"><li class="vazio">Nenhuma transação enviada nesta sessão.</li></ul>
       </section>
 
-      <section class="card">
-        <h2>Eventos do contrato</h2>
+      <!-- Eventos: o fiscalizador vê todos; cada participante, só os que envolvem a conta dele -->
+      <section id="cardEventos" class="card" hidden>
+        <h2 id="tituloEventos">Eventos do contrato</h2>
         <ul id="listaEventos" class="lista-eventos"><li class="vazio">Carregando…</li></ul>
       </section>
     </div>

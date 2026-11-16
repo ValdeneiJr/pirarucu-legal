@@ -44,11 +44,12 @@ const estado = {
   papel: 0,
   nome: "",
   peixes: [],
-  filtro: "todos", // filtro da lista de peixes
+  filtro: "tudo", // filtro da lista de peixes (frigorífico e mercado): tudo, meus ou comprar
   eventos: [],
   chavesEventos: new Set(), // "hash:índice" de cada log já guardado
   ultimoBlocoEventos: null,
   participantes: new Map(), // endereço (minúsculo) -> { nome, papel }
+  cotas: new Map(), // endereço da comunidade (minúsculo) -> { adultosContados, limite, capturados }
 };
 
 const $ = (id) => document.getElementById(id);
@@ -131,7 +132,6 @@ function ligarEventosDaTela() {
     const b = e.target.closest("button[data-filtro]");
     if (!b) return;
     estado.filtro = b.dataset.filtro;
-    $("filtroPeixes").querySelectorAll("button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
     renderizarPeixes();
   });
   $("formAutorizar").elements.adultos.addEventListener("input", (e) => {
@@ -383,21 +383,23 @@ async function atualizarTudo() {
     await carregarSaldos();
     if (contratoConfigurado()) {
       await Promise.all([carregarResumo(), carregarPeixes(), carregarEventos()]);
-      await atualizarPapel();
+      // As comunidades vêm dos eventos, por isso as cotas são lidas depois
+      await Promise.all([atualizarPapel(), carregarCotas()]);
     }
   } catch (e) {
     console.error(e);
     toast(`Não foi possível ler o contrato: ${mensagemDeErro(e)}`, true);
   }
   renderizarTela();
-  renderizarEventos();
 }
 
 // Partes da tela que dependem da conta ativa
 function renderizarTela() {
   renderizarContas();
   renderizarPaineis();
+  renderizarCotas();
   renderizarPeixes();
+  renderizarEventos();
 }
 
 // Saldo em ETH de todas as contas conectadas (aparece no menu de troca)
@@ -453,6 +455,17 @@ async function carregarPeixes() {
     pagina.forEach((p) => peixes.push(normalizarPeixe(p)));
   }
   estado.peixes = peixes;
+}
+
+// Cota de cada comunidade cadastrada (getter público "cotas"), lidas em paralelo
+async function carregarCotas() {
+  const comunidades = [...estado.participantes.entries()].filter(([, p]) => p.papel === 1).map(([conta]) => conta);
+  const cotas = await Promise.all(comunidades.map((c) => estado.contratoLeitura.methods.cotas(c).call()));
+  estado.cotas = new Map(comunidades.map((c, i) => [c, {
+    adultosContados: Number(cotas[i].adultosContados),
+    limite: Number(cotas[i].limite),
+    capturados: Number(cotas[i].capturados),
+  }]));
 }
 
 function normalizarPeixe(p) {
@@ -689,6 +702,27 @@ function ePrincipal() {
   return mesmoEndereco(estado.conta, estado.fiscalizador);
 }
 
+// Cada tipo de usuário vê só o que é dele e o que é público para ele.
+// A blockchain é pública (tudo pode ser lido no Etherscan); a separação é da tela.
+function visao() {
+  if (!estado.conta || !contratoConfigurado()) return "visitante";
+  if (ePrincipal()) return "fiscal";
+  return ["visitante", "comunidade", "frigorifico", "mercado"][estado.papel] || "visitante";
+}
+
+// O peixe é "meu" se eu sou o dono atual, se minha comunidade o pescou ou se
+// eu já o vendi (evento PeixeVendido com vendedor = minha conta)
+function participeiDoPeixe(p) {
+  return eMeu(p.dono) || eMeu(p.comunidade) || estado.eventos.some((e) => e.event === "PeixeVendido"
+    && Number(e.returnValues.id) === p.id && eMeu(e.returnValues.vendedor));
+}
+
+// O evento envolve a conta ativa em algum dos seus endereços?
+function eventoEnvolveMim(e) {
+  const v = e.returnValues || {};
+  return ["conta", "comunidade", "vendedor", "comprador", "mercado"].some((k) => v[k] && eMeu(v[k]));
+}
+
 function eMeu(endereco) {
   return mesmoEndereco(endereco, estado.conta);
 }
@@ -795,20 +829,65 @@ async function renderizarPaineis() {
   }
 }
 
+// Cartão por comunidade: capturados / limite, com barra de progresso
+function renderizarCotas() {
+  $("cardCotas").hidden = visao() !== "fiscal";
+  const alvo = $("listaCotas");
+  if (!contratoConfigurado()) {
+    alvo.replaceChildren(el("p", { class: "vazio" }, "Configure o endereço do contrato em contrato.js."));
+    return;
+  }
+  if (!estado.cotas.size) {
+    alvo.replaceChildren(el("p", { class: "vazio" }, "Nenhuma comunidade cadastrada ainda."));
+    return;
+  }
+  alvo.replaceChildren(...[...estado.cotas.entries()].map(([conta, c]) => {
+    const autorizada = c.limite > 0;
+    const esgotada = autorizada && c.capturados >= c.limite;
+    const barra = el("span", { style: `width: ${autorizada ? Math.min(100, (c.capturados / c.limite) * 100) : 0}%` });
+    if (esgotada) barra.classList.add("cheia");
+    return el("article", { class: "cota-item" },
+      el("div", { class: "cota-topo" },
+        el("strong", {}, nomeDe(conta)),
+        el("span", { class: `etiqueta${esgotada ? " esgotada" : autorizada ? "" : " pendente"}` },
+          esgotada ? "Cota esgotada" : autorizada ? `${c.limite - c.capturados} restante(s)` : "Aguardando autorização")),
+      el("div", { class: "cota-numeros" },
+        el("strong", {}, String(c.capturados)), ` de ${c.limite} peixes capturados`),
+      el("div", { class: "cota-barra" }, barra),
+      el("small", {}, autorizada ? `${c.adultosContados} adultos contados · cota de ${PERCENTUAL_COTA}%` : "O fiscalizador ainda não autorizou o manejo."));
+  }));
+}
+
 function renderizarPeixes() {
   const alvo = $("listaPeixes");
   if (!contratoConfigurado()) {
     alvo.replaceChildren(el("p", { class: "vazio" }, "Configure o endereço do contrato em contrato.js."));
     return;
   }
-  const filtro = estado.filtro;
+  const v = visao();
+  $("cardPeixes").hidden = v === "visitante";
+  // Só frigorífico e mercado compram: só eles alternam entre "meus" e "à venda para mim"
+  const compra = v === "frigorifico" || v === "mercado";
+  $("filtroPeixes").hidden = !compra;
+  const filtro = compra ? estado.filtro : "meus";
+  $("filtroPeixes").querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.filtro === filtro)));
+  const vendedores = v === "frigorifico" ? "as comunidades" : "os frigoríficos";
+  const textos = {
+    fiscal: ["Todos os peixes", "Como fiscalizador, você acompanha todos os peixes registrados."],
+    tudo: ["Peixes", `Os seus peixes e os que ${vendedores} puseram à venda para você.`],
+    meus: ["Meus peixes", "Peixes que são seus ou que já passaram por você."],
+    comprar: ["À venda para mim", `Peixes que ${vendedores} puseram à venda para você.`],
+  }[v === "fiscal" ? "fiscal" : filtro];
+  $("tituloPeixes").textContent = textos[0];
+  $("dicaPeixes").textContent = textos[1];
+
+  const filtros = { tudo: (p) => participeiDoPeixe(p) || podeComprar(p), meus: participeiDoPeixe, comprar: podeComprar };
   let lista = [...estado.peixes].reverse(); // mais novos primeiro
-  if (filtro === "meus") lista = lista.filter((p) => eMeu(p.dono));
-  if (filtro === "comprar") {
-    lista = lista.filter(podeComprar);
-  }
+  if (v !== "fiscal") lista = lista.filter(filtros[filtro]);
   if (!lista.length) {
-    alvo.replaceChildren(el("p", { class: "vazio" }, "Nenhum peixe para mostrar."));
+    alvo.replaceChildren(el("p", { class: "vazio" }, filtro === "comprar" && compra
+      ? "Nenhum peixe à venda para você agora."
+      : "Nenhum peixe para mostrar."));
     return;
   }
   alvo.replaceChildren(...lista.map(cartaoPeixe));
@@ -899,12 +978,17 @@ function acoesDoPeixe(p) {
 }
 
 function renderizarEventos() {
+  const v = visao();
+  $("cardEventos").hidden = v === "visitante";
+  $("cardTx").hidden = !estado.conta;
+  $("tituloEventos").textContent = v === "fiscal" ? "Eventos do contrato" : "Meus eventos";
   const alvo = $("listaEventos");
-  if (!estado.eventos.length) {
+  const eventos = v === "fiscal" ? estado.eventos : estado.eventos.filter(eventoEnvolveMim);
+  if (!eventos.length) {
     alvo.replaceChildren(el("li", { class: "vazio" }, "Nenhum evento ainda."));
     return;
   }
-  const recentes = [...estado.eventos].reverse().slice(0, MAX_EVENTOS_NA_TELA);
+  const recentes = [...eventos].reverse().slice(0, MAX_EVENTOS_NA_TELA);
   alvo.replaceChildren(...recentes.map((e) => el("li", {},
     el("div", { class: "evento-nome" }, e.event),
     el("div", {}, descreverEvento(e)),
