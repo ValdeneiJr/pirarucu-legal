@@ -129,6 +129,17 @@ As linhas se referem a [`contracts/PirarucuLegal.sol`](contracts/PirarucuLegal.s
 | **Modificadores** | L136-167: `apenasFiscalizador` (dono), `apenasPapel(Papel)` **com parâmetro**, `peixeExiste(id)`, `apenasDonoDoPeixe(id)`, `noEstado(id, Etapa)` **com parâmetro** | Tiram as verificações repetidas de dentro das funções e concentram o controle de acesso |
 | **EventosEErros** | L95-134: 6 eventos com `indexed` (`id`, `comunidade`, `vendedor`, `comprador`…) e 18 erros personalizados com parâmetros (`CotaEsgotada(capturados, limite)`, `ValorIncorreto(esperado, enviado)`, `FalhaNoPagamento(vendedor, valor)`…), além dos `require` | Os eventos formam o histórico que o frontend lê com `getPastEvents`, e o `indexed` permite filtrar por peixe ou conta. Os erros personalizados custam menos gas que strings e trazem os valores para o frontend montar mensagens claras |
 
+### O que cada usuário vê no frontend
+
+| Quem | O que aparece |
+|---|---|
+| Visitante (sem carteira ou conta sem papel) | Totais e **Consultar lacre** |
+| Fiscalizador (dono) | Painel do fiscalizador (cadastro e manejo), cotas de todas as comunidades, todos os peixes e todos os eventos |
+| Comunidade | Registrar captura com a própria cota, os próprios peixes e os eventos que envolvem a conta |
+| Frigorífico e mercado | Os próprios peixes (os que têm ou já tiveram), os peixes à venda para eles e os eventos que envolvem a conta |
+
+A separação é só da tela: os dados da blockchain são públicos e podem ser lidos por qualquer pessoa no Etherscan.
+
 ### Segurança
 
 - **Controle de acesso:** fiscalizador/dono (`apenasFiscalizador`), papéis (`apenasPapel`) e dono do peixe (`apenasDonoDoPeixe`). Um papel não pode ser trocado depois do cadastro, e o fiscalizador não pode ter outro papel.
@@ -146,18 +157,18 @@ As linhas se referem a [`frontend/app.js`](frontend/app.js), que está dividido 
 | Conceito | Onde | Como foi feito |
 |---|---|---|
 | Endereço + ABI do contrato | [`contrato.js`](frontend/contrato.js) e seção 1 (L17) | `CONTRATO.endereco`, `CONTRATO.abi` e `blocoDeploy` num arquivo separado da lógica |
-| Provider injetado (`window.ethereum`) | Seção 2: `iniciar()` (L73), `configurarProvedores()` (L110) | Reconexão silenciosa com `eth_accounts` (L92). Sem MetaMask, a leitura usa um RPC público |
+| Provider injetado (`window.ethereum`) | Seção 2: `iniciar()` (L74), `configurarProvedores()` (L111) | Reconexão silenciosa com `eth_accounts` (L94). Sem MetaMask, a leitura usa um RPC público |
 | Conectar carteira | Seção 3: `conectar()` (L173) | `eth_requestAccounts`, que abre o popup da MetaMask |
 | Conferir e trocar a rede | `verificarRede()` (L188), `trocarParaSepolia()` (L198) | `eth_chainId`, `wallet_switchEthereumChain` e, se a rede não estiver cadastrada (4902), `wallet_addEthereumChain` |
-| Reação a troca de conta/rede | `aoTrocarConta()` (L229), `aoTrocarRede()` (L239), ouvintes na L89 | `accountsChanged` e `chainChanged` atualizam o estado e a tela **sem recarregar a página** |
-| Troca rápida entre contas | `definirContas()` (L247), `trocarConta()` (L254), `conectarMaisContas()` (L278), `renderizarContas()` (L732) | `eth_accounts` devolve todas as contas autorizadas; o menu suspenso da conta escolhe qual vai no `from` das transações, sem trocar de conta na MetaMask. `wallet_requestPermissions` inclui mais contas |
-| Leitura gratuita com `.call()` | Seção 4: `atualizarPapel()` (L414), `carregarResumo()` (L432), `carregarPeixes()` (L446) | `Promise.all` em paralelo, `uint256` tratado como `BigInt` e leitura paginada de `listarPeixes` |
-| Consulta de logs com `getPastEvents` | Seção 5: `carregarEventos()` (L495) | `allEvents` a partir do bloco do deploy, em lotes de 5.000 blocos, buscando só os blocos novos a cada atualização |
-| Transação assinada com `.send()` | Seção 6: `enviar()` (L564) | Simulação com `.call()` antes (L566), `estimateGas` + 20% de folga, `.on("transactionHash")` (L579) e estados *aguardando assinatura → pendente → confirmada/falhou* |
-| Envio de ETH (`value`) | `enviar()` (L567), botão de compra (L891) | `comprar(id)` é `payable` e recebe o preço exato em wei no campo `value` |
-| Tela conforme o papel da conta | Seção 7: `ePrincipal()` (L688), `renderizarPaineis()` (L762), `acoesDoPeixe()` (L869) | O painel administrativo só aparece para o dono do contrato, e cada conta só vê os botões do seu papel. O contrato confere as mesmas regras de novo |
-| Tratamento de erros | Seção 8: `montarSeletoresDeErro()` (L1001), `decodificarErro()` (L1033), `mensagemDeErro()` (L1053) | Rejeição (4001), erros personalizados decodificados pelo seletor da ABI, `require` (`Error(string)`), saldo insuficiente e pedido pendente (-32002) |
-| Proteção contra XSS | Seção 9: `el()` (L1081) | A tela é montada com `textContent`, nunca `innerHTML`, porque dados on-chain foram digitados por usuários |
+| Reação a troca de conta/rede | `aoTrocarConta()` (L229), `aoTrocarRede()` (L239), ouvintes na L91 | `accountsChanged` e `chainChanged` atualizam o estado e a tela **sem recarregar a página** |
+| Troca rápida entre contas | `definirContas()` (L247), `trocarConta()` (L254), `conectarMaisContas()` (L278), `renderizarContas()` (L766) | `eth_accounts` devolve todas as contas autorizadas; o menu suspenso da conta escolhe qual vai no `from` das transações, sem trocar de conta na MetaMask. `wallet_requestPermissions` inclui mais contas |
+| Leitura gratuita com `.call()` | Seção 4: `atualizarPapel()` (L416), `carregarResumo()` (L434), `carregarPeixes()` (L448), `carregarCotas()` (L461) | `Promise.all` em paralelo, `uint256` tratado como `BigInt` e leitura paginada de `listarPeixes` |
+| Consulta de logs com `getPastEvents` | Seção 5: `carregarEventos()` (L508) | `allEvents` a partir do bloco do deploy, em lotes de 5.000 blocos, buscando só os blocos novos a cada atualização |
+| Transação assinada com `.send()` | Seção 6: `enviar()` (L577) | Simulação com `.call()` antes (L585), `estimateGas` + 20% de folga, `.on("transactionHash")` (L598) e estados *aguardando assinatura → pendente → confirmada/falhou* |
+| Envio de ETH (`value`) | `enviar()` (L580), botão de compra (L970) | `comprar(id)` é `payable` e recebe o preço exato em wei no campo `value` |
+| Tela conforme o papel da conta | Seção 7: `visao()` (L707), `renderizarPaineis()` (L796), `renderizarPeixes()` (L861), `renderizarEventos()` (L980), `acoesDoPeixe()` (L948) | Cada tipo de usuário vê só o que é dele e o que é público para ele (tabela abaixo). O contrato confere as mesmas regras de novo |
+| Tratamento de erros | Seção 8: `montarSeletoresDeErro()` (L1085), `decodificarErro()` (L1117), `mensagemDeErro()` (L1137) | Rejeição (4001), erros personalizados decodificados pelo seletor da ABI, `require` (`Error(string)`), saldo insuficiente e pedido pendente (-32002) |
+| Proteção contra XSS | Seção 9: `el()` (L1165) | A tela é montada com `textContent`, nunca `innerHTML`, porque dados on-chain foram digitados por usuários |
 
 ## 7. Como usar
 
@@ -217,9 +228,9 @@ Use o contrato já implantado, pela URL da Vercel. Cada passo indica a conta ati
 | 2 | qualquer | Trocar a MetaMask para outra rede | Aviso de rede errada e botão **Trocar para Sepolia** |
 | 3 | Fiscalizador | No **Painel do fiscalizador**, cadastrar a comunidade, o frigorífico e o mercado | Transação *pendente* → *confirmada*, com link para o Etherscan e evento `ParticipanteCadastrado` na lista |
 | 4 | Fiscalizador | Cadastrar de novo a conta da comunidade com outro papel | **Erro tratado:** "já está cadastrada, e o papel não pode ser trocado" |
-| 5 | Fiscalizador | Autorizar o manejo da comunidade com 10 adultos | A prévia mostra cota de 3, e aparece o evento `ManejoAutorizado` |
+| 5 | Fiscalizador | Autorizar o manejo da comunidade com 10 adultos | A prévia mostra cota de 3, aparece o evento `ManejoAutorizado`, e o card **Cotas das comunidades** passa a mostrar *0 de 3 peixes capturados* |
 | 6 | Comunidade | Trocar de conta (menu da conta no topo do site, ou na MetaMask) | A tela muda sozinha: some o painel do fiscalizador e aparece **Registrar captura** com a cota |
-| 7 | Comunidade | Registrar o lacre `AM-000101`, 1.92 m, 74.5 kg, Lago Mamirauá | O peixe #0 aparece em **Peixes** como *Na comunidade* |
+| 7 | Comunidade | Registrar o lacre `AM-000101`, 1.92 m, 74.5 kg, Lago Mamirauá | O peixe #0 aparece em **Peixes** como *Na comunidade*, e a cota da comunidade vai para *1 de 3* |
 | 8 | Comunidade | Registrar um peixe de 1.40 m | **Erro tratado:** "está fora da faixa permitida (1,50 m a 3,00 m)" |
 | 9 | Comunidade | No peixe #0, **Pôr à venda** por 0.001 ETH e **rejeitar** na MetaMask | **Erro tratado:** "Você rejeitou a transação" |
 | 10 | Comunidade | Repetir e confirmar | Evento `PeixeAVenda` |
