@@ -8,7 +8,7 @@ Rastreabilidade do **pirarucu de manejo** da Amazônia com um **contrato intelig
 |---|---|
 | **dApp na Vercel** | https://pirarucu-legal.vercel.app |
 | **Contrato na Sepolia** | [`0x54379BeFff83a3B314Fa560e0B0AAaac266D05ED`](https://sepolia.etherscan.io/address/0x54379BeFff83a3B314Fa560e0B0AAaac266D05ED) |
-| **Vídeo de demonstração** | *(link)* |
+| **Vídeo de demonstração** | [link](https://drive.google.com/file/d/1gM1UsJsCyNTn9TUv375hU4CY1AEOuc4F/view?usp=drive_link) |
 | **Slides** | [`docs/slides.pdf`](docs/slides.pdf) |
 
 ---
@@ -45,10 +45,10 @@ No Amazonas, o manejo segue o **Decreto estadual nº 36.083/2015**, que exige:
 
 | Nome | Papel | GitHub |
 |---|---|---|
-| *(nome)* | Desenvolvedor(a) do contrato | @… |
-| *(nome)* | Desenvolvedor(a) frontend | @… |
-| *(nome)* | Integração Web3 | @… |
-| *(nome)* | Documentação e QA | @… |
+| Aline Daffiny | Desenvolvedor(a) do contrato | @daffinyyy |
+| Valdenei Junior | Desenvolvedor(a) frontend | @ValdeneiJr |
+| Valdenei Junior | Integração Web3 | @ValdeneiJr |
+| Aline Daffiny | Documentação e QA | @daffinyyy |
 
 O contrato da v2 segue o fluxo da v1 e se limita ao essencial: cadastro, cota, captura por lacre e venda pela cadeia com pagamento em ETH. A equipe chegou a ter versões com mais recursos (fiscalizadores adicionais, suspensão de contas, apreensão e cadeia do frio), que ficaram de fora para manter o contrato simples. Elas estão em *Melhorias futuras*.
 
@@ -208,15 +208,6 @@ python3 -m http.server 8080   # abra http://localhost:8080
 2. Em **Root Directory**, escolha `v2/frontend`. O *Framework Preset* é **Other**, sem comando de build.
 3. Clique em *Deploy*. A cada `git push`, a Vercel publica de novo.
 
-### Testes automatizados do contrato (opcional)
-
-Além dos testes manuais no Remix, `testes/test_contrato.py` roda 27 testes numa EVM local, inclusive o caso em que o pagamento ao vendedor falha e a compra é desfeita, sem gastar SepoliaETH:
-
-```bash
-cd v2
-pip install "web3[tester]" py-solc-x pytest
-pytest testes/ -v
-```
 
 ## 8. Roteiro de teste
 
@@ -266,7 +257,7 @@ Valores medidos numa EVM local (eth-tester), com o otimizador ligado. A Sepolia 
 
 ## 10. Declaração de uso de ferramentas de IA
 
-*(preencher pela equipe)*
+O modelo Claude.ai (Anthropic) foi utilizado como ferramenta de apoio à organização, elaboração e revisão da documentação do projeto, incluindo a estruturação do README
 
 ## Estrutura do repositório
 
@@ -280,8 +271,6 @@ v2/
 │   ├── app.js                 # conexão, chamadas, transações e eventos
 │   ├── constantes.js          # rede Sepolia, textos dos enums e limites
 │   └── contrato.js            # ABI + endereço
-├── testes/
-│   └── test_contrato.py       # testes automatizados do contrato (opcional)
 ├── docs/
 │   ├── slides.pdf
 │   └── prints/                # capturas do Remix, MetaMask e Etherscan
